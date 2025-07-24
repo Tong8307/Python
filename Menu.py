@@ -9,8 +9,8 @@ from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent
 from styles import load_stylesheet, get_menu_button_style
 from room_booking import RoomBookingWidget
 
-
-class FeatureButton(QPushButton):
+#Create class to enable reusability because if function need to use public variable to keep track
+class FeatureButton(QPushButton): 
     def __init__(self, icon_path, text, parent=None):
         super().__init__(parent)
         self.setObjectName("FeatureButton")
@@ -44,10 +44,10 @@ class SlidingMenu(QWidget):
         super().__init__(parent)
         self.setObjectName("slidingMenu")
         self.setFixedWidth(350)
-        self.setStyleSheet("background-color:white;")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 40, 0, 0)
+        layout.setSpacing(0) 
 
         profile_widget = QWidget()
         profile_widget.setObjectName("profileWidget")
@@ -132,6 +132,7 @@ class SlidingMenu(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.user_id = 1001 #Temporary set Only
         self.setWindowTitle("Student Assistant")
         self.setFixedSize(800, 900)
 

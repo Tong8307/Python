@@ -66,15 +66,16 @@ def load_stylesheet():
     #menuOptions {
         background-color: white;
         text-align: left;
-        padding: 28px 30px;
+        padding: 30px 30px;  
         font-size: 16px;
         border: none;
         color: #283593;
-        font-weight:500;
+        font-weight: 500;
+        margin: 0; 
     }
 
     #menuOptions:hover {
-        background-color: #303F9F; 
+        background-color: #283593; 
         color: white;
     }
 
