@@ -98,6 +98,45 @@ def load_stylesheet():
         font-size: 28px;
         font-weight: 500;
     }
+    
+    /* ===== GPA Calculator ===== */
+    QLineEdit {
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        padding: 6px;
+        font-size: 16px;
+    }
+
+    QComboBox {
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        padding: 4px;
+        font-size: 16px;
+        background-color: white;
+    }
+
+    QPushButton {
+        background-color: #3949AB;
+        color: white;
+        border-radius: 6px;
+        padding: 10px;
+        font-weight: 500;
+    }
+
+    QPushButton:hover {
+        background-color: #5C6BC0;
+    }
+
+    QLabel {
+        font-size: 16px;
+    }
+
+    QLabel#resultLabel {
+        font-size: 20px;
+        font-weight: bold;
+        color: #2E7D32;
+        margin-top: 20px;
+    }
     """
 
 def get_menu_button_style():

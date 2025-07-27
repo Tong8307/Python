@@ -1,10 +1,22 @@
 import sys
+import ctypes
+import os
+# Optional: Reduce scale to make app appear smaller
+os.environ["QT_SCALE_FACTOR"] = "1.7"  # or try "0.8" to shrink more
+os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"  # disable auto-scaling
+
+ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Only works on Windows
+
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QLabel, QPushButton, QHBoxLayout, QFileDialog,
                              QMessageBox, QGridLayout)
 from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QBrush
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent
 from styles import *
+from gpaCalculator import GPACalculatorWidget
+
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 
 class FeatureButton(QPushButton):
     def __init__(self, icon_path, text, parent=None):
@@ -216,7 +228,8 @@ class MainWindow(QMainWindow):
             self.open_note_organizer()
         elif feature_name == "Room Booking":
             self.open_room_booking()
-        # Add other features...
+        elif feature_name == "GPA Calculator":
+            self.open_gpa_calculator()
     
     def open_note_organizer(self):
         print("Opening Note Organizer...")
@@ -225,6 +238,27 @@ class MainWindow(QMainWindow):
     def open_room_booking(self):
         print("Opening Room Booking...")
         # Implement your room booking functionality
+    
+    def open_gpa_calculator(self):
+
+        # Remove all previous widgets in the content layout
+        content_widget = self.centralWidget().layout().itemAt(1).widget()
+        for i in reversed(range(content_widget.layout().count())):
+            child = content_widget.layout().itemAt(i).widget()
+            if child is not None:
+                child.setParent(None)
+
+        # Add GPA calculator widget
+        gpa_widget = GPACalculatorWidget()
+        content_widget.layout().addWidget(gpa_widget)
+
+    def handle_feature_click(self, feature_name):
+        if feature_name == "GPA Calculator":
+            self.load_gpa_calculator()
+
+    def load_gpa_calculator(self):
+        gpa_widget = GPACalculatorWidget()
+        self.setCentralWidget(gpa_widget)
     
     def eventFilter(self, obj, event):
         if (self.menu_shown and 
