@@ -7,7 +7,7 @@ cursor = conn.cursor()
 # --- USERS TABLE
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY UNIQUE,
+    id TEXT PRIMARY KEY UNIQUE,
     password TEXT NOT NULL,
     name TEXT NOT NULL,
     role TEXT DEFAULT 'user'
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
+    user_id TEXT,
     room_id INTEGER,
     date TEXT NOT NULL,
     start_time TEXT NOT NULL,
