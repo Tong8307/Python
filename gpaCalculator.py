@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QComboBox, QApplication, QMessageBox, QScrollArea
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit,
+    QComboBox, QPushButton, QSpinBox, QScrollArea, QFrame
 )
 from PyQt5.QtCore import Qt
 import sys
@@ -14,70 +14,111 @@ qualityPoint = {
 class GPACalculatorWidget(QWidget):
     def __init__(self):
         super().__init__()
+        self.setWindowTitle("GPA and CGPA Calculator")
+        self.setMinimumWidth(800)
 
-        layout = QVBoxLayout()
+        self.course_rows = []
 
-        # Current CGPA section
-        self.current_cgpa_label = QLabel("Enter current CGPA:")
-        self.current_cgpa_input = QLineEdit()
-        layout.addWidget(self.current_cgpa_label)
-        layout.addWidget(self.current_cgpa_input)
+        main_layout = QVBoxLayout()
 
-        self.completed_credit_label = QLabel("Enter completed credit hours:")
-        self.completed_credit_input = QLineEdit()
-        layout.addWidget(self.completed_credit_label)
-        layout.addWidget(self.completed_credit_input)
+        # Title
+        title = QLabel("🎓 GPA and CGPA Calculator")
+        title.setStyleSheet("font-size: 24px; font-weight: bold;")
+        main_layout.addWidget(title)
 
-        self.new_gpa_label = QLabel("Enter GPA for new semester:")
-        self.new_gpa_input = QLineEdit()
-        layout.addWidget(self.new_gpa_label)
-        layout.addWidget(self.new_gpa_input)
+        desc = QLabel(
+            "This is a GPA (Grade Point Average) and CGPA (Cumulative Grade Point Average) calculator.\n"
+            "To calculate your GPA, enter the Credit and select the Grade for each course/subject.\n"
+            "To calculate your CGPA, enter your current CGPA and Credits Completed prior to this semester."
+        )
+        desc.setStyleSheet("color: #555; margin-bottom: 10px;")
+        main_layout.addWidget(desc)
 
-        self.new_credit_label = QLabel("Enter credit hours for new semester:")
-        self.new_credit_input = QLineEdit()
-        layout.addWidget(self.new_credit_label)
-        layout.addWidget(self.new_credit_input)
+        # Top fields: Current CGPA & Credits Completed
+        top_layout = QHBoxLayout()
+        self.cgpa_input = QLineEdit()
+        self.cgpa_input.setPlaceholderText("E.g. 3.12")
+        self.credits_input = QLineEdit()
+        self.credits_input.setPlaceholderText("E.g. 45")
 
-        self.calculate_btn = QPushButton("Calculate CGPA")
-        self.calculate_btn.clicked.connect(self.calculate_gpa)
-        layout.addWidget(self.calculate_btn)
+        top_layout.addWidget(self.create_labeled("Current CGPA:", self.cgpa_input))
+        top_layout.addWidget(self.create_labeled("Credits Completed:", self.credits_input))
+        main_layout.addLayout(top_layout)
 
-        self.result_label = QLabel("")
-        layout.addWidget(self.result_label)
+        # Course area
+        course_label = QLabel("Course (optional)")
+        course_label.setStyleSheet("font-weight: bold; font-size: 18px; margin-top: 15px;")
+        main_layout.addWidget(course_label)
 
-        self.setLayout(layout)
+        self.course_layout = QVBoxLayout()
+        for _ in range(5):
+            self.add_course_row()
 
-    def add_subject_row(self):
-        h_layout = QHBoxLayout()
+        main_layout.addLayout(self.course_layout)
 
-        name_input = QLineEdit()
-        name_input.setPlaceholderText("Subject Name")
-        credit_input = QLineEdit()
-        credit_input.setPlaceholderText("Credit Hours")
-        grade_input = QComboBox()
-        grade_input.addItems(qualityPoint.keys())
+        # Add Course button
+        add_btn = QPushButton("+ Add course")
+        add_btn.setStyleSheet("""
+            QPushButton {
+                border: 2px dashed #673AB7;
+                color: #673AB7;
+                padding: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #F3E5F5;
+            }
+        """)
+        add_btn.clicked.connect(self.add_course_row)
+        main_layout.addWidget(add_btn)
 
-        h_layout.addWidget(name_input)
-        h_layout.addWidget(credit_input)
-        h_layout.addWidget(grade_input)
+        self.setLayout(main_layout)
 
-        self.subject_rows.append((name_input, credit_input, grade_input))
-        self.entry_area.addLayout(h_layout)
+    def create_labeled(self, text, widget):
+        container = QVBoxLayout()
+        label = QLabel(text)
+        label.setStyleSheet("font-weight: bold;")
+        container.addWidget(label)
+        container.addWidget(widget)
+        wrapper = QWidget()
+        wrapper.setLayout(container)
+        return wrapper
 
-    def calculate_gpa(self):
-        try:
-            current_cgpa = float(self.current_cgpa_input.text())
-            completed_credits = float(self.completed_credit_input.text())
-            new_gpa = float(self.new_gpa_input.text())
-            new_credits = float(self.new_credit_input.text())
+    def add_course_row(self):
+        row_layout = QHBoxLayout()
 
-            total_points = current_cgpa * completed_credits + new_gpa * new_credits
-            total_credits = completed_credits + new_credits
-            new_cgpa = total_points / total_credits
+        name = QLineEdit()
+        name.setPlaceholderText("Course name")
 
-            self.result_label.setText(f"Your new CGPA is: {new_cgpa:.2f}")
-        except:
-            self.result_label.setText("Please enter valid numbers.")
+        credits = QSpinBox()
+        credits.setRange(0, 10)
+        credits.setSuffix(" credits")
+        credits.setFixedWidth(120)
+
+        grade = QComboBox()
+        grade.addItem("Grade")
+        grade.addItems(qualityPoint.keys())
+
+        remove_btn = QPushButton("✕")
+        remove_btn.setFixedWidth(30)
+        remove_btn.setStyleSheet("color: gray;")
+        remove_btn.clicked.connect(lambda: self.remove_course_row(row_layout))
+
+        row_layout.addWidget(name)
+        row_layout.addWidget(credits)
+        row_layout.addWidget(grade)
+        row_layout.addWidget(remove_btn)
+
+        self.course_rows.append((name, credits, grade))
+        self.course_layout.addLayout(row_layout)
+
+    def remove_course_row(self, row_layout):
+        for i in reversed(range(row_layout.count())):
+            widget = row_layout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+        self.course_layout.removeItem(row_layout)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

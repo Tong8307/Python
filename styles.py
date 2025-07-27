@@ -137,6 +137,28 @@ def load_stylesheet():
         color: #2E7D32;
         margin-top: 20px;
     }
+
+    QLabel#title {
+        font-size: 24px;
+        font-weight: bold;
+        color: #283593;
+        margin-bottom: 10px;
+    }
+
+    QLabel {
+        font-size: 14px;
+    }
+
+    QPushButton {
+        background-color: #3949AB;
+        color: white;
+        padding: 10px;
+        border-radius: 6px;
+    }
+
+    QPushButton:hover {
+        background-color: #5C6BC0;
+    }
     """
 
 def get_menu_button_style():
