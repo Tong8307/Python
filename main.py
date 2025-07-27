@@ -203,7 +203,7 @@ class MainWindow(QMainWindow):
 
         features = [
             ("Photo/note_icon.png", "Note Organizer"),
-            ("Photo/room_icon.png", "Room Booking"),
+            ("Photo/discussion.png", "Room Booking"),
             ("Photo/gpa_icon.png", "GPA Calculator"),
             ("Photo/QA_icon.png", "Q & A sessions"),
         ]

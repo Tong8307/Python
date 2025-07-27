@@ -11,7 +11,7 @@ def get_booking_styles():
         font-size: 30px;
         font-weight: bold;
         color: #283593;
-        padding: 5px 0px 0px 3px;
+        padding: 5px 0px 0px 5px;
     }
 
     /* ===== Sub Header Styles ===== */
@@ -19,7 +19,7 @@ def get_booking_styles():
         font-size: 18px;
         font-weight: 500;
         color: #4B4B4C;
-        padding: 0px 0px 0px 8px;
+        padding: 0px 0px 0px 10px;
     }
 
     /* ===== Room Table Styles ===== */
@@ -63,27 +63,18 @@ def get_booking_styles():
     }            
             
     /* ===== Back Button Styles ===== */
-    QPushButton#backButton {
-        background-color: #f5f5f5;
-        color: #555;
-        border: 1px solid #ddd;
+    QPushButton#iconBackButton {
+        background-color: #283593;
+        color: white;
+        border: none;
         border-radius: 6px;
-        padding: 8px 15px;
-        font-size: 14px;
-        font-weight: 500;
-        min-width: 120px;
+        padding: 8px 15px 8px 10px;
+        spacing: 8px;
+        text-align: center;
     }
 
-    QPushButton#backButton:hover {
-        background-color: #e0e0e0;
-        border-color: #ccc;
-        color: #333;
-    }
-
-    QPushButton#backButton:pressed {
-        background-color: #d0d0d0;
-        border-color: #bbb;
-        padding: 9px 15px 7px 15px;  /* Simulate "pressed down" effect */
+    QPushButton#iconBackButton:hover {
+        background-color: #1A237E;
     }
 
     /* ===== Status Message Styles ===== */
