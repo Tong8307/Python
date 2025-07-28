@@ -142,7 +142,18 @@ def load_stylesheet():
         font-size: 24px;
         font-weight: bold;
         color: #283593;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
+    }
+
+    QLabel#desc {
+        color: #555;
+        margin-bottom: 12px;
+    }
+
+    QLabel#course_label {
+        font-weight: bold;
+        font-size: 18px;
+        margin-top: 15px;
     }
 
     QLabel {
@@ -150,14 +161,26 @@ def load_stylesheet():
     }
 
     QPushButton {
-        background-color: #3949AB;
-        color: white;
+        border: 2px dashed #673AB7;
+        color: #673AB7;
         padding: 10px;
-        border-radius: 6px;
+        font-weight: bold;
     }
 
     QPushButton:hover {
-        background-color: #5C6BC0;
+        background-color: #F3E5F5;
+    }
+
+    #addCourseButton {
+    border: 2px dashed #673AB7;
+    color: #673AB7;
+    padding: 10px;
+    font-weight: bold;
+    background-color: transparent;
+    }
+
+    #addCourseButton:hover {
+        background-color: #F3E5F5;
     }
     """
 
