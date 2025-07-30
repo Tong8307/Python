@@ -1,4 +1,7 @@
 import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton,
     QHBoxLayout, QFileDialog, QMessageBox, QGridLayout, QStackedWidget
@@ -6,6 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QFont, QPainter, QBrush # Graphics handling
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent # Core Qt functionality
 
+from notes_organizer_function.notes_organizer import NoteOrganizerWidget
 from styles.styles import *
 from room_booking_function.room_booking import *
 
@@ -223,7 +227,10 @@ class MainWindow(QMainWindow):
         if feature_name == "Room Booking":
             self.pages.setCurrentWidget(self.location_selection_page)
         elif feature_name == "Note Organizer":
-            print("Future: Go to Note Organizer")
+            if not hasattr(self, 'note_organizer_page'):
+                self.note_organizer_page = NoteOrganizerWidget(self)
+                self.pages.addWidget(self.note_organizer_page)
+            self.pages.setCurrentWidget(self.note_organizer_page)
         else:
             print(f"{feature_name} clicked!")
 
