@@ -108,7 +108,7 @@ class LocationSelectionWidget(QWidget):
         try:
             self.main_window.open_room_booking_page(location_id)
         except Exception as e:
-            print(f"Navigation error: {e}")
+            print(f"Navigation error: {e}") 
             
     def go_back(self):
         self.main_window.pages.setCurrentWidget(self.main_window.feature_grid_page)
@@ -220,6 +220,7 @@ class RoomBookingWidget(QWidget):
         # Booking form widgets
         self.setup_booking_form(layout)
         self.pages.addWidget(self.new_booking_page)
+        
 
     def setup_booking_form(self, layout):
         """Setup the actual booking form components"""
