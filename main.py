@@ -1,4 +1,11 @@
 import sys
+import ctypes
+import os
+# Optional: Reduce scale to make app appear smaller
+os.environ["QT_SCALE_FACTOR"] = "1.7"  # or try "0.8" to shrink more
+os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"  # disable auto-scaling
+
+ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Only works on Windows
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton,
     QHBoxLayout, QFileDialog, QMessageBox, QGridLayout, QStackedWidget
@@ -7,7 +14,9 @@ from PyQt5.QtGui import QPixmap, QFont, QPainter, QBrush # Graphics handling
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent # Core Qt functionality
 
 from styles.styles import *
+from styles.gpa_styles import *
 from room_booking_function.room_booking import *
+from gpa_calculator_function.gpaCalculator import *
 
 #Create class to enable reusability because if function need to use public variable to keep track
 # self is used in class methods to refer to the current instance of the class (to avoid global settings), can be call by using passed references 
@@ -272,6 +281,26 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.room_booking_widget_by_location)
         self.pages.setCurrentWidget(self.room_booking_widget_by_location)
 
+    def open_gpa_calculator(self):
+
+        # Remove all previous widgets in the content layout
+        content_widget = self.centralWidget().layout().itemAt(1).widget()
+        for i in reversed(range(content_widget.layout().count())):
+            child = content_widget.layout().itemAt(i).widget()
+            if child is not None:
+                child.setParent(None)
+
+        # Add GPA calculator widget
+        gpa_widget = GPACalculatorWidget()
+        content_widget.layout().addWidget(gpa_widget)
+
+    def handle_feature_click(self, feature_name):
+        if feature_name == "GPA Calculator":
+            self.load_gpa_calculator()
+
+    def load_gpa_calculator(self):
+        gpa_widget = GPACalculatorWidget()
+        self.setCentralWidget(gpa_widget)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
