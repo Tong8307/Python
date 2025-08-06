@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 import sys
-from styles.gpa_styles import *
+from styles.gpa_styles import gpa_styles
 
 qualityPoint = {
     "A+": 4.00, "A": 4.00, "A-": 3.67,
@@ -13,14 +13,18 @@ qualityPoint = {
 }
 
 class GPACalculatorWidget(QWidget):
-    def __init__(self):
+    def __init__(self, main_window):
         super().__init__()
-        self.setWindowTitle("GPA and CGPA Calculator")
+        self.main_window = main_window
+        
         self.setStyleSheet(gpa_styles())
 
+        # Main layout with proper spacing
+        main_layout = QVBoxLayout(self)
+        self.setWindowTitle("GPA and CGPA Calculator")  
         self.course_rows = []
 
-        main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout(self)
 
         title = QLabel("GPA and CGPA Calculator")
         title.setObjectName("title")

@@ -194,6 +194,9 @@ class MainWindow(QMainWindow):
         self.location_selection_page = LocationSelectionWidget(self)
         self.pages.addWidget(self.location_selection_page)
 
+        self.gpa_page = GPACalculatorWidget(self)
+        self.pages.addWidget(self.gpa_page)
+
         self.sliding_menu = SlidingMenu(self)
         self.sliding_menu.move(-self.sliding_menu.width(), 60) #Places it offscreen initially (hidden).
         self.sliding_menu.setFixedHeight(self.height() - 60) #Starts from top offset of 60px (to stay below header)
@@ -233,6 +236,8 @@ class MainWindow(QMainWindow):
             self.pages.setCurrentWidget(self.location_selection_page)
         elif feature_name == "Note Organizer":
             print("Future: Go to Note Organizer")
+        elif feature_name == "GPA Calculator":
+            self.pages.setCurrentWidget(self.gpa_page)
         else:
             print(f"{feature_name} clicked!")
 
@@ -282,7 +287,6 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentWidget(self.room_booking_widget_by_location)
 
     def open_gpa_calculator(self):
-
         # Remove all previous widgets in the content layout
         content_widget = self.centralWidget().layout().itemAt(1).widget()
         for i in reversed(range(content_widget.layout().count())):
@@ -294,13 +298,13 @@ class MainWindow(QMainWindow):
         gpa_widget = GPACalculatorWidget()
         content_widget.layout().addWidget(gpa_widget)
 
-    def handle_feature_click(self, feature_name):
-        if feature_name == "GPA Calculator":
-            self.load_gpa_calculator()
-
     def load_gpa_calculator(self):
-        gpa_widget = GPACalculatorWidget()
-        self.setCentralWidget(gpa_widget)
+        if hasattr(self, 'gpa_widget'):
+            self.pages.removeWidget(self.gpa_widget)
+            self.gpa_widget.deleteLater()
+
+        self.gpa_widget = GPACalculatorWidget(self)
+        self.pages.addWidget(self.gpa_widget)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
