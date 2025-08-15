@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit,
-    QComboBox, QPushButton, QSpinBox
+    QComboBox, QPushButton, QSpinBox, QMessageBox
 )
 from PyQt5.QtCore import Qt
 import sys
@@ -20,11 +20,11 @@ class GPACalculatorWidget(QWidget):
         self.setStyleSheet(gpa_styles())
 
         # Main layout with proper spacing
-        main_layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout()
         self.setWindowTitle("GPA and CGPA Calculator")  
         self.course_rows = []
 
-        main_layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout()
 
         title = QLabel("GPA and CGPA Calculator")
         title.setObjectName("title")
@@ -139,11 +139,27 @@ class GPACalculatorWidget(QWidget):
         self.update_results()
 
     def remove_course_row(self, row_layout):
+        if len(self.course_rows) <= 1:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setWindowTitle("Cannot Remove")
+            msg.setText("You must have at least one course row.")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            return  # stop here if only 1 row remains
+
         for i in reversed(range(row_layout.count())):
             widget = row_layout.itemAt(i).widget()
             if widget:
                 widget.setParent(None)
         self.course_layout.removeItem(row_layout)
+
+        # Also remove from course_rows list
+        self.course_rows = [
+            row for row in self.course_rows
+            if row[0].parentWidget() is not None  # keep only those still in layout
+        ]
+
         self.update_results()
 
     def update_results(self):
