@@ -2,7 +2,8 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit,
     QComboBox, QPushButton, QSpinBox, QMessageBox
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QIcon,QPixmap
 import sys
 from styles.gpa_styles import gpa_styles
 
@@ -21,22 +22,18 @@ class GPACalculatorWidget(QWidget):
 
         # Main layout with proper spacing
         main_layout = QVBoxLayout()
-        self.setWindowTitle("GPA and CGPA Calculator")  
         self.course_rows = []
-
-        main_layout = QVBoxLayout()
 
         title = QLabel("GPA and CGPA Calculator")
         title.setObjectName("title")
 
         desc = QLabel(
-            "This is a GPA (Grade Point Average) and CGPA (Cumulative Grade Point Average) calculator.\n"
             "To calculate your GPA, enter the Credit and select the Grade for each course/subject.\n"
             "To calculate your CGPA, enter your current CGPA and Credits Completed prior to this semester."
         )
         desc.setObjectName("desc")
 
-        main_layout.addWidget(title)  # ✅ Not a string
+        main_layout.addWidget(title)
         main_layout.addWidget(desc)
 
         top_layout = QHBoxLayout()
@@ -95,6 +92,17 @@ class GPACalculatorWidget(QWidget):
         add_btn.setObjectName("addCourseButton")
         add_btn.clicked.connect(self.add_course_row)
         main_layout.addWidget(add_btn)
+
+         # Back button with enhanced styling
+        back_btn = QPushButton()
+        back_btn.setIcon(QIcon("Photo/back.png"))
+        back_btn.setText(" Back to Home")
+        back_btn.setFixedSize(750, 40)
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setObjectName("iconBackButton")
+        back_btn.setIconSize(QSize(16, 16))
+        back_btn.clicked.connect(self.go_back)
+        main_layout.addWidget(back_btn, 0, Qt.AlignCenter)
 
     def create_labeled(self, text, widget):
         self.setStyleSheet(gpa_styles())
@@ -190,6 +198,9 @@ class GPACalculatorWidget(QWidget):
         except:
             self.total_credits_label.setText(str(total_credits))
             self.cgpa_label.setText(f"{gpa:.2f}")
+
+    def go_back(self):
+        self.main_window.pages.setCurrentWidget(self.main_window.feature_grid_page)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
