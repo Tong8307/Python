@@ -1,9 +1,10 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit,
-    QComboBox, QPushButton, QSpinBox, QMessageBox
+    QComboBox, QPushButton, QSpinBox, QMessageBox, QFrame, QSizePolicy, 
+    QScrollArea, QGridLayout
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIcon,QPixmap
+from PyQt5.QtGui import QIcon, QFont
 import sys
 from styles.gpa_styles import gpa_styles
 
@@ -20,10 +21,27 @@ class GPACalculatorWidget(QWidget):
         
         self.setStyleSheet(gpa_styles())
 
-        # Main layout with proper spacing
-        main_layout = QVBoxLayout()
-        self.course_rows = []
+        # Create result labels first with larger fonts
+        self.semester_credits_label = QLabel("0")
+        self.gpa_label = QLabel("0.00")
+        self.total_credits_label = QLabel("0")
+        self.cgpa_label = QLabel("0.00")
+        
+        # Set larger fonts for result values
+        value_font = QFont()
+        value_font.setPointSize(16)
+        value_font.setBold(True)
+        self.semester_credits_label.setFont(value_font)
+        self.gpa_label.setFont(value_font)
+        self.total_credits_label.setFont(value_font)
+        self.cgpa_label.setFont(value_font)
 
+        # Main container layout
+        container_layout = QVBoxLayout()
+        container_layout.setSpacing(15)
+        container_layout.setContentsMargins(20, 15, 20, 15)
+        
+        # Title and description (full width)
         title = QLabel("GPA and CGPA Calculator")
         title.setObjectName("title")
 
@@ -32,11 +50,29 @@ class GPACalculatorWidget(QWidget):
             "To calculate your CGPA, enter your current CGPA and Credits Completed prior to this semester."
         )
         desc.setObjectName("desc")
+        desc.setWordWrap(True)
 
-        main_layout.addWidget(title)
-        main_layout.addWidget(desc)
+        container_layout.addWidget(title)
+        container_layout.addWidget(desc)
+        
+        # Create a container for the main content and results
+        content_container = QHBoxLayout()
+        content_container.setSpacing(20)
+        
+        # Left side - inputs (takes more space)
+        left_widget = QWidget()
+        left_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(15)
 
-        top_layout = QHBoxLayout()
+        self.course_rows = []
+
+        # Top input section - use grid layout for better alignment
+        input_grid = QGridLayout()
+        input_grid.setVerticalSpacing(10)
+        input_grid.setHorizontalSpacing(15)
+
         self.cgpa_input = QLineEdit()
         self.cgpa_input.setPlaceholderText("E.g. 3.75")
         self.cgpa_input.textChanged.connect(self.update_results)
@@ -45,55 +81,151 @@ class GPACalculatorWidget(QWidget):
         self.credits_input.setPlaceholderText("E.g. 45")
         self.credits_input.textChanged.connect(self.update_results)
 
-        top_layout.addWidget(self.create_labeled("Current CGPA:", self.cgpa_input))
-        top_layout.addWidget(self.create_labeled("Credits Completed:", self.credits_input))
-        main_layout.addLayout(top_layout)
+        input_grid.addWidget(QLabel("Current CGPA:"), 0, 0)
+        input_grid.addWidget(self.cgpa_input, 0, 1)
+        input_grid.addWidget(QLabel("Credits Completed:"), 1, 0)
+        input_grid.addWidget(self.credits_input, 1, 1)
 
+        left_layout.addLayout(input_grid)
+
+        # Course section header with Credits and Grade on the same row
+        course_header = QHBoxLayout()
+
+        # Courses label on the left
         course_label = QLabel("Courses (optional):")
-        course_label.setObjectName("course_label")
-        main_layout.addWidget(course_label)
+        course_label.setObjectName("course_header")
+        course_header.addWidget(course_label)
 
-        # Result panel
-        result_panel = QVBoxLayout()
+        # Add stretch to push the other headers to the right
+        course_header.addStretch()
 
-        self.semester_credits_label = QLabel("0")
-        self.semester_credits_label.setObjectName("resultLabel")
-        self.gpa_label = QLabel("0")
-        self.gpa_label.setObjectName("resultLabel")
-        self.total_credits_label = QLabel("0")
-        self.total_credits_label.setObjectName("resultLabel")
-        self.cgpa_label = QLabel("0")
-        self.cgpa_label.setObjectName("resultLabel")
+        # Credits header
+        credits_label = QLabel("Credits")
+        credits_label.setObjectName("course_header")
+        credits_label.setAlignment(Qt.AlignCenter)
+        credits_label.setFixedWidth(80)
+        course_header.addWidget(credits_label)
 
-        result_panel.addWidget(QLabel("Semester Credits:"))
-        result_panel.addWidget(self.semester_credits_label)
-        result_panel.addWidget(QLabel("GPA:"))
-        result_panel.addWidget(self.gpa_label)
-        result_panel.addWidget(QLabel("Total Credits:"))
-        result_panel.addWidget(self.total_credits_label)
-        result_panel.addWidget(QLabel("CGPA:"))
-        result_panel.addWidget(self.cgpa_label)
+        # Add some spacing between Credits and Grade
+        course_header.addSpacing(10)
 
-        layout_wrapper = QHBoxLayout()
-        layout_wrapper.addLayout(main_layout, 3)
-        layout_wrapper.addLayout(result_panel, 1)
+        # Grade header
+        grade_label = QLabel("Grade")
+        grade_label.setObjectName("course_header")
+        grade_label.setAlignment(Qt.AlignCenter)
+        grade_label.setFixedWidth(80)
+        course_header.addWidget(grade_label)
 
-        self.setLayout(layout_wrapper)
-        self.update_results()
+        # Add space for the remove button
+        course_header.addSpacing(40)
 
-        self.course_layout = QVBoxLayout()
+        left_layout.addLayout(course_header)
 
+        # Create scroll area for courses
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMaximumHeight(300)
+        scroll_area.setMinimumHeight(150)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        
+        # Create widget for scroll area content
+        scroll_content = QWidget()
+        self.course_layout = QVBoxLayout(scroll_content)
+        self.course_layout.setAlignment(Qt.AlignTop)
+        self.course_layout.setSpacing(5)
+        self.course_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Add initial course rows
         for _ in range(5):
             self.add_course_row()
+        
+        scroll_area.setWidget(scroll_content)
+        left_layout.addWidget(scroll_area)
 
-        main_layout.addLayout(self.course_layout)
-
-        add_btn = QPushButton("+ Add course")
+        # Add course button with better placement
+        button_container = QHBoxLayout()
+        button_container.addStretch()
+        add_btn = QPushButton("+ Add Course")
         add_btn.setObjectName("addCourseButton")
+        add_btn.setFixedWidth(590)
         add_btn.clicked.connect(self.add_course_row)
-        main_layout.addWidget(add_btn)
-
-         # Back button with enhanced styling
+        button_container.addWidget(add_btn)
+        button_container.addStretch()
+        left_layout.addLayout(button_container)
+        
+        content_container.addWidget(left_widget, 70)  # 70% space for left side
+        
+        # Right side - results card (smaller)
+        result_card = QFrame()
+        result_card.setObjectName("resultCard")
+        result_card.setFixedWidth(150)
+        result_card.setFixedHeight(500)
+        result_card.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        
+        result_layout = QVBoxLayout(result_card)
+        result_layout.setAlignment(Qt.AlignCenter)  # Center content vertically
+        result_layout.setSpacing(15)
+        result_layout.setContentsMargins(15, 15, 15, 20)
+        
+        # Add title to result card
+        result_title = QLabel("Results")
+        result_title.setObjectName("resultTitle")
+        result_title.setAlignment(Qt.AlignCenter)
+        result_layout.addWidget(result_title)
+        
+        # Add separator line
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("background-color: #ddd; margin: 5px 0;")
+        result_layout.addWidget(separator)
+        
+        # Add result items with centered values and better distribution
+        result_items = [
+            ("Semester Credits", self.semester_credits_label),
+            ("GPA", self.gpa_label),
+            ("Total Credits", self.total_credits_label),
+            ("CGPA", self.cgpa_label)
+        ]
+        
+        for label_text, value_label in result_items:
+            # Create a container for each result item
+            item_container = QVBoxLayout()
+            item_container.setSpacing(5)
+            item_container.setAlignment(Qt.AlignCenter)
+            
+            # Label for the item
+            label = QLabel(label_text)
+            label.setObjectName("resultItemLabel")
+            label.setAlignment(Qt.AlignCenter)
+            
+            # Value for the item (centered)
+            value_label.setObjectName("resultValue")
+            value_label.setAlignment(Qt.AlignCenter)
+            
+            item_container.addWidget(label)
+            item_container.addWidget(value_label)
+            result_layout.addLayout(item_container)
+            
+            # Add small separator between items (except after the last one)
+            if label_text != "CGPA":
+                small_separator = QFrame()
+                small_separator.setFrameShape(QFrame.HLine)
+                small_separator.setFrameShadow(QFrame.Sunken)
+                small_separator.setStyleSheet("background-color: #eee; margin: 5px 10px;")
+                small_separator.setFixedHeight(1)
+                result_layout.addWidget(small_separator)
+        
+        # Add stretch to distribute content evenly
+        result_layout.addStretch()
+        
+        content_container.addWidget(result_card, 30)  # 30% space for right side
+        
+        container_layout.addLayout(content_container)
+        
+        # Back button
         back_btn = QPushButton()
         back_btn.setIcon(QIcon("Photo/back.png"))
         back_btn.setText(" Back to Home")
@@ -102,51 +234,60 @@ class GPACalculatorWidget(QWidget):
         back_btn.setObjectName("iconBackButton")
         back_btn.setIconSize(QSize(16, 16))
         back_btn.clicked.connect(self.go_back)
-        main_layout.addWidget(back_btn, 0, Qt.AlignCenter)
 
-    def create_labeled(self, text, widget):
-        self.setStyleSheet(gpa_styles())
-        container = QVBoxLayout()
-        label = QLabel(text)
-        label.setStyleSheet("font-weight: bold;")
-        container.addWidget(label)
-        container.addWidget(widget)
-        wrapper = QWidget()
-        wrapper.setLayout(container)
-        return wrapper
+        container_layout.addWidget(back_btn)
+        
+        self.setLayout(container_layout)
+        self.update_results()
 
     def add_course_row(self):
-        row_layout = QHBoxLayout()
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 5, 0, 5)
+        row_layout.setSpacing(8)
 
         name = QLineEdit()
         name.setPlaceholderText("Course name")
+        name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         credits = QSpinBox()
         credits.setRange(0, 10)
         credits.setSuffix(" credits")
-        credits.setFixedWidth(120)
+        credits.setFixedWidth(80)
         credits.valueChanged.connect(self.update_results)
 
         grade = QComboBox()
         grade.addItem("Grade")
         grade.addItems(qualityPoint.keys())
+        grade.setFixedWidth(80)
         grade.currentIndexChanged.connect(self.update_results)
 
-        remove_btn = QPushButton("\u2715")
-        remove_btn.setFixedWidth(30)
-        remove_btn.setStyleSheet("color: gray;")
-        remove_btn.clicked.connect(lambda: self.remove_course_row(row_layout))
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(25, 25)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                color: #ff4444;
+                font-size: 14px;
+                font-weight: bold;
+                border: 1px solid #ffcccc;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #ffeeee;
+            }
+        """)
+        remove_btn.clicked.connect(lambda: self.remove_course_row(row_widget))
 
-        row_layout.addWidget(name)
-        row_layout.addWidget(credits)
-        row_layout.addWidget(grade)
-        row_layout.addWidget(remove_btn)
+        row_layout.addWidget(name, 1)
+        row_layout.addWidget(credits, 0)
+        row_layout.addWidget(grade, 0)
+        row_layout.addWidget(remove_btn, 0)
 
-        self.course_rows.append((name, credits, grade))
-        self.course_layout.addLayout(row_layout)
+        self.course_rows.append((name, credits, grade, row_widget))
+        self.course_layout.addWidget(row_widget)
         self.update_results()
 
-    def remove_course_row(self, row_layout):
+    def remove_course_row(self, row_widget):
         if len(self.course_rows) <= 1:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Warning)
@@ -154,27 +295,23 @@ class GPACalculatorWidget(QWidget):
             msg.setText("You must have at least one course row.")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
-            return  # stop here if only 1 row remains
+            return
 
-        for i in reversed(range(row_layout.count())):
-            widget = row_layout.itemAt(i).widget()
-            if widget:
-                widget.setParent(None)
-        self.course_layout.removeItem(row_layout)
-
-        # Also remove from course_rows list
-        self.course_rows = [
-            row for row in self.course_rows
-            if row[0].parentWidget() is not None  # keep only those still in layout
-        ]
-
+        # Find and remove the row from course_rows
+        for i, (name, credits, grade, widget) in enumerate(self.course_rows):
+            if widget == row_widget:
+                self.course_rows.pop(i)
+                break
+        
+        # Remove the widget from layout
+        row_widget.setParent(None)
         self.update_results()
 
     def update_results(self):
         total_quality_points = 0
         total_credits = 0
 
-        for name, credits, grade in self.course_rows:
+        for name, credits, grade, widget in self.course_rows:
             selected_grade = grade.currentText()
             credit_val = credits.value()
 
