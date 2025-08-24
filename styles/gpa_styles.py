@@ -1,5 +1,27 @@
 def gpa_styles():
     return """
+        QWidget#GPACalculatorWidget {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        color: #333333;
+        }
+
+        /* ===== Header Styles ===== */
+        QLabel#gpaHeader {
+            font-size: 30px;
+            font-weight: bold;
+            color: #283593;
+            padding: 5px 0px 0px 5px;
+        }
+
+        /* ===== Sub Header Styles ===== */
+        QLabel#gpaSubheader {
+            font-size: 15px;
+            font-weight: 500;
+            color: #4B4B4C;
+            padding: 0px 0px 0px 10px;
+            margin-bottom: 10px;
+        }
+
         /* Global styles */
         QLineEdit {
             border: 1px solid #ccc;
@@ -17,6 +39,25 @@ def gpa_styles():
             background-color: white;
         }
 
+        QComboBox QAbstractItemView {
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+
+        QComboBox QAbstractItemView::item {
+            padding: 4px;
+        }
+
+        QComboBox QAbstractItemView::item:selected {
+            background-color: #3949AB;
+            color: white;
+        }
+
+        QComboBox::drop-down {
+            border: none;
+            width: 20px;
+        }
+
         QPushButton {
             background-color: #3949AB;
             color: white;
@@ -24,6 +65,7 @@ def gpa_styles():
             padding: 8px;
             font-weight: 500;
             font-size: 14px;
+            border: none;
         }
 
         QPushButton:hover {
@@ -31,31 +73,16 @@ def gpa_styles():
         }
 
         QLabel {
-            font-size: 14px;
-        }
-
-        /* Specific element styles */
-        QLabel#title {
-            font-size: 22px;
+            font-size: 18px;
             font-weight: bold;
-            color: #283593;
-            margin-bottom: 5px;
-        }
-
-        QLabel#desc {
-            color: #555;
-            margin-bottom: 15px;
-            font-size: 14px;
-            padding: 5px;
-            background-color: #f9f9f9;
-            border-radius: 4px;
+            color: #4B4B4C;
+            padding: 0px 0px 0px 10px;
         }
 
         QLabel#course_header {
             font-weight: bold;
-            font-size: 16px;
-            margin-top: 5px;
-            color: #333;
+            font-size: 18px;
+            color: #4B4B4C;
         }
 
         /* Add Course Button */
@@ -80,12 +107,24 @@ def gpa_styles():
             border: none;
             border-radius: 6px;
             padding: 8px 15px 8px 10px;
-            spacing: 8px;
-            text-align: center;
         }
 
         QPushButton#iconBackButton:hover {
             background-color: #1A237E;
+        }
+
+        /* Remove Course Button */
+        QPushButton#removeCourseButton {
+            color: #ff4444;
+            font-size: 18px;
+            font-weight: bold;
+            border: 1px solid #ffcccc;
+            border-radius: 3px;
+            background-color: transparent;
+        }
+        
+        QPushButton#removeCourseButton:hover {
+            background-color: #ffeeee;
         }
 
         /* Result Card */
@@ -102,8 +141,7 @@ def gpa_styles():
             color: #673AB7;
             background-color: #F3E5F5;
             padding: 12px;
-            border-top-left-radius: 5px;
-            border-top-right-radius: 5px;
+            border-radius: 5px;
         }
 
         /* Result Items */
@@ -114,10 +152,15 @@ def gpa_styles():
         }
 
         QLabel#resultValue {
-            color: #2E7D32;
             font-weight: bold;
             font-size: 18px;
             padding: 5px;
+        }
+
+        /* Separators */
+        QFrame#resultSeparator {
+            background-color: #ddd;
+            margin: 5px 0;
         }
 
         /* Scroll Area */
@@ -129,19 +172,4 @@ def gpa_styles():
         QScrollArea QWidget {
             background-color: transparent;
         }
-        
-    """
-
-def get_menu_button_style():
-    return """
-    QPushButton#menuButton {
-        background-color: #283593;
-        color: white;
-        border: none;
-        font-size: 20px;
-    }
-    
-    QPushButton#menuButton:hover {
-        color: #C5CAE9;
-    }
     """
