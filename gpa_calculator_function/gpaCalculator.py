@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit,
     QComboBox, QPushButton, QSpinBox, QMessageBox, QFrame, QSizePolicy, 
-    QScrollArea, QGridLayout
+    QScrollArea, QGridLayout, QGroupBox
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIcon, QFont
+from PyQt5.QtGui import QIcon, QFont, QDoubleValidator, QIntValidator
 import sys
 from styles.gpa_styles import gpa_styles
 
@@ -19,8 +19,14 @@ class GPACalculatorWidget(QWidget):
         super().__init__()
         self.main_window = main_window
         
+        # Initialize course_rows list
+        self.course_rows = []
+        
         self.setStyleSheet(gpa_styles())
+        self.init_ui()
+        self.update_results()
 
+    def init_ui(self):
         # Create result labels first with larger fonts
         self.semester_credits_label = QLabel("0")
         self.gpa_label = QLabel("0.00")
@@ -38,10 +44,33 @@ class GPACalculatorWidget(QWidget):
 
         # Create main layout for the widget
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 5)
-        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(15, 10, 15, 10)
+        main_layout.setSpacing(15)
 
-        # Create a scroll area for the content (will scroll)
+        # Header and subheader spanning full width
+        title = QLabel("GPA and CGPA Calculator")
+        title.setObjectName("gpaHeader")
+        main_layout.addWidget(title)
+
+        subtitle = QLabel(
+            "To calculate your GPA, enter the Credit and select the Grade for each course/subject.\n"
+            "To calculate your CGPA, enter your current CGPA and Credits Completed prior to this semester.")
+        subtitle.setObjectName("gpaSubheader")
+        subtitle.setWordWrap(True)
+        main_layout.addWidget(subtitle)
+
+        # Create horizontal layout for content (inputs + results)
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(20)
+
+        # Left side - scrollable inputs
+        left_widget = QWidget()
+        left_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+
+        # Create a scroll area for the inputs only
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -50,60 +79,52 @@ class GPACalculatorWidget(QWidget):
         container_widget = QWidget()
         scroll_area.setWidget(container_widget)
         
-        # Main container layout for scrollable content
+        # Container layout for scrollable content
         container_layout = QVBoxLayout(container_widget)
         container_layout.setSpacing(15)
-        container_layout.setContentsMargins(15, 10, 15, 10)
+        container_layout.setContentsMargins(0, 0, 20, 0)
 
-        title = QLabel("GPA and CGPA Calculator")
-        title.setObjectName("gpaHeader")
-        container_layout.addWidget(title)
+        # Create group box for current academic status
+        status_group = QGroupBox("Current Academic Status")
+        status_group.setObjectName("statusGroup")
+        status_layout = QGridLayout(status_group)
+        status_layout.setVerticalSpacing(10)
+        status_layout.setHorizontalSpacing(15)
 
-        subtitle = QLabel(
-            "To calculate your GPA, enter the Credit and select the Grade for each course/subject.\n"
-            "To calculate your CGPA, enter your current CGPA and Credits Completed prior to this semester.")
-        subtitle.setObjectName("gpaSubheader")
-        subtitle.setWordWrap(True)
-        container_layout.addWidget(subtitle)
-
-        # Create a container for the main content and results
-        content_container = QHBoxLayout()
-        content_container.setSpacing(20)
+        # Add input validators
+        cgpa_validator = QDoubleValidator(0.0, 4.0, 2)
+        cgpa_validator.setNotation(QDoubleValidator.StandardNotation)
         
-        # Left side - inputs (takes more space)
-        left_widget = QWidget()
-        left_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(15)
-
-        self.course_rows = []
-
-        # Top input section - use grid layout for better alignment
-        input_grid = QGridLayout()
-        input_grid.setVerticalSpacing(10)
-        input_grid.setHorizontalSpacing(15)
-
+        credits_validator = QIntValidator(0, 1000)
+        
         self.cgpa_input = QLineEdit()
         self.cgpa_input.setPlaceholderText("E.g. 3.75")
+        self.cgpa_input.setValidator(cgpa_validator)
         self.cgpa_input.textChanged.connect(self.update_results)
 
         self.credits_input = QLineEdit()
         self.credits_input.setPlaceholderText("E.g. 45")
+        self.credits_input.setValidator(credits_validator)
         self.credits_input.textChanged.connect(self.update_results)
 
-        input_grid.addWidget(QLabel("Current CGPA\t:"), 0, 0)
-        input_grid.addWidget(self.cgpa_input, 0, 1)
-        input_grid.addWidget(QLabel("Credits Completed :"), 1, 0)
-        input_grid.addWidget(self.credits_input, 1, 1)
+        status_layout.addWidget(QLabel("Current CGPA:"), 0, 0)
+        status_layout.addWidget(self.cgpa_input, 0, 1)
+        status_layout.addWidget(QLabel("Credits Completed:"), 1, 0)
+        status_layout.addWidget(self.credits_input, 1, 1)
 
-        left_layout.addLayout(input_grid)
+        container_layout.addWidget(status_group)
 
+        # Course section
+        course_group = QGroupBox("Courses")
+        course_group.setObjectName("courseGroup")
+        course_layout = QVBoxLayout(course_group)
+        
         # Course section header
         course_header = QHBoxLayout()
+        course_header.setContentsMargins(0, 0, 10, 0)
 
         # Courses label on the left
-        course_label = QLabel("Courses (optional)")
+        course_label = QLabel("Course Name")
         course_label.setObjectName("course_header")
         course_header.addWidget(course_label)
 
@@ -130,53 +151,66 @@ class GPACalculatorWidget(QWidget):
         # Add space for the remove button
         course_header.addSpacing(40)
 
-        left_layout.addLayout(course_header)
+        course_layout.addLayout(course_header)
 
         # Create widget for courses
         course_content = QWidget()
-        self.course_layout = QVBoxLayout(course_content)
-        self.course_layout.setAlignment(Qt.AlignTop)
-        self.course_layout.setSpacing(5)
-        self.course_layout.setContentsMargins(0, 0, 0, 0)
+        self.course_content_layout = QVBoxLayout(course_content)
+        self.course_content_layout.setAlignment(Qt.AlignTop)
+        self.course_content_layout.setSpacing(5)
+        self.course_content_layout.setContentsMargins(0, 0, 0, 0)
         
         # Add initial course rows
-        for _ in range(6):
+        for _ in range(3):
             self.add_course_row()
 
-        left_layout.addWidget(course_content)
+        course_layout.addWidget(course_content)
 
-        # Add course button with better placement
+        container_layout.addWidget(course_group)
+
+        # Add course and reset buttons container
         button_container = QHBoxLayout()
+        button_container.setSpacing(10)
+        
+        # Add course button
         add_btn = QPushButton("+ Add Course")
         add_btn.setObjectName("addCourseButton")
-        add_btn.setFixedWidth(390)
+        add_btn.setFixedWidth(360)
         add_btn.clicked.connect(self.add_course_row)
         button_container.addWidget(add_btn)
+        
+        # Reset button
+        reset_btn = QPushButton("Reset All")
+        reset_btn.setObjectName("resetButton")
+        reset_btn.setFixedWidth(175)
+        reset_btn.clicked.connect(self.reset_all)
+        button_container.addWidget(reset_btn)
+        
         button_container.addStretch()
-        left_layout.addLayout(button_container)
+        container_layout.addLayout(button_container)
         
-        content_container.addWidget(left_widget, 60)
+        # Add scroll area to left layout
+        left_layout.addWidget(scroll_area)
+        content_layout.addWidget(left_widget, 75)  # 75% width for left side
         
-        # Right side - results card (smaller)
+        # Right side - fixed result card (outside the scroll area)
         result_card = QFrame()
         result_card.setObjectName("resultCard")
-        result_card.setFixedWidth(150)
-        result_card.setFixedHeight(500)
-        result_card.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        result_card.setMinimumWidth(180)
+        result_card.setMaximumWidth(200)
+        result_card.setMaximumHeight(545)
+        result_card.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         
         result_layout = QVBoxLayout(result_card)
         result_layout.setAlignment(Qt.AlignCenter)
-        result_layout.setSpacing(20)
-        result_layout.setContentsMargins(0, 10, 0, 5)
+        result_layout.setSpacing(10)
+        result_layout.setContentsMargins(5, 8, 5, 8)
         
         # Add title to result card
         result_title = QLabel("Results")
         result_title.setObjectName("resultTitle")
         result_title.setAlignment(Qt.AlignCenter)
         result_layout.addWidget(result_title)
-        
-        # Add stretch at the top to push content to middle
-        result_layout.addStretch()
         
         # Add result items with centered values
         result_items = [
@@ -189,7 +223,7 @@ class GPACalculatorWidget(QWidget):
         for label_text, value_label in result_items:
             # Create a container for each result item
             item_container = QVBoxLayout()
-            item_container.setSpacing(15)
+            item_container.setSpacing(10)
             item_container.setAlignment(Qt.AlignCenter)
             
             # Label for the item
@@ -214,17 +248,12 @@ class GPACalculatorWidget(QWidget):
                 small_separator.setFixedHeight(1)
                 result_layout.addWidget(small_separator)
         
-        # Add stretch at the bottom to center the content vertically
-        result_layout.addStretch()
+        content_layout.addWidget(result_card, 25)  # 25% width for right side
         
-        content_container.addWidget(result_card, 40)
+        # Add content layout to main layout
+        main_layout.addLayout(content_layout, 1)  # 1 = stretch factor to expand
         
-        container_layout.addLayout(content_container)
-        
-        # Add scroll area to main layout (this will scroll)
-        main_layout.addWidget(scroll_area, 1)  # 1 = stretch factor to expand
-        
-        # Back button
+        # Back button at the bottom
         back_btn = QPushButton()
         back_btn.setIcon(QIcon("Photo/back.png"))
         back_btn.setText(" Back to Home")
@@ -234,8 +263,6 @@ class GPACalculatorWidget(QWidget):
         back_btn.setIconSize(QSize(16, 16))
         back_btn.clicked.connect(self.go_back)
         main_layout.addWidget(back_btn, 0, Qt.AlignCenter)
-        
-        self.update_results()
 
     def add_course_row(self):
         row_widget = QWidget()
@@ -249,13 +276,14 @@ class GPACalculatorWidget(QWidget):
 
         credits = QSpinBox()
         credits.setRange(0, 10)
+        credits.setValue(0)
         credits.setFixedWidth(75)
         credits.valueChanged.connect(self.update_results)
 
         grade = QComboBox()
-        grade.addItem("Grade")
-        grade.addItems(qualityPoint.keys())
-        grade.setFixedWidth(80)
+        grade.addItems(list(qualityPoint.keys()))
+        grade.setCurrentIndex(0)
+        grade.setFixedWidth(70)
         grade.currentIndexChanged.connect(self.update_results)
 
         remove_btn = QPushButton("×")
@@ -269,7 +297,7 @@ class GPACalculatorWidget(QWidget):
         row_layout.addWidget(remove_btn, 0)
 
         self.course_rows.append((name, credits, grade, row_widget))
-        self.course_layout.addWidget(row_widget)
+        self.course_content_layout.addWidget(row_widget)
         self.update_results()
 
     def remove_course_row(self, row_widget):
@@ -295,26 +323,59 @@ class GPACalculatorWidget(QWidget):
         
         self.update_results()
 
+    def reset_all(self):
+        """Reset all inputs and course rows"""
+        reply = QMessageBox.question(self, 'Reset Confirmation', 
+                                   'Are you sure you want to reset all inputs?',
+                                   QMessageBox.Yes | QMessageBox.No, 
+                                   QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            # Clear CGPA and credits inputs
+            self.cgpa_input.clear()
+            self.credits_input.clear()
+            
+            # Remove all course rows except 3 (the default rows)
+            while len(self.course_rows) > 3:
+                self.remove_course_row(self.course_rows[-1][3])
+            
+            # Reset the remaining course row
+            if self.course_rows:
+                name, credits, grade, widget = self.course_rows[0]
+                name.clear()
+                credits.setValue(0)
+                grade.setCurrentIndex(0)
+            
+            self.update_results()
+
     def validate_numeric_input(self, text, field_name, is_float=False):
-        """Validate numeric input and show error message if invalid"""
+        """Validate numeric input and return valid status and value"""
         try:
+            if not text:  # Empty is valid (optional field)
+                return True, 0
+                
             if is_float:
                 value = float(text)
-                if value < 0 or value > 4.0:
-                    raise ValueError(f"{field_name} must be between 0 and 4.0")
+                if value <= 0 or value > 4.0:  # CGPA should be between 0 and 4.0
+                    QMessageBox.warning(self, "Invalid Input", 
+                                    f"{field_name} must be between 0.0 and 4.0")
+                    return False, 0  # Return 0 instead of None
             else:
                 value = int(text)
                 if value < 0:
-                    raise ValueError(f"{field_name} must be positive")
+                    QMessageBox.warning(self, "Invalid Input", 
+                                    f"{field_name} cannot be negative")
+                    return False, 0  # Return 0 instead of None
             return True, value
-        except ValueError as e:
-            if text:  # Only show error if field is not empty
-                QMessageBox.warning(self, "Invalid Input", str(e))
-            return False, None
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Input", 
+                            f"Please enter a valid number for {field_name}")
+            return False, 0  # Return 0 instead of None
 
     def update_results(self):
         total_quality_points = 0
         total_credits = 0
+        valid_courses = 0
 
         for name, credits, grade, widget in self.course_rows:
             selected_grade = grade.currentText()
@@ -324,38 +385,44 @@ class GPACalculatorWidget(QWidget):
                 gp = qualityPoint[selected_grade]
                 total_quality_points += gp * credit_val
                 total_credits += credit_val
+                valid_courses += 1
 
         self.semester_credits_label.setText(str(total_credits))
-        gpa = total_quality_points / total_credits if total_credits > 0 else 0
-        self.gpa_label.setText(f"{gpa:.2f}")
-
-        # Validate inputs before calculation
-        current_cgpa = 0
-        completed_credits = 0
-        cgpa_valid = True
-        credits_valid = True
         
-        if self.cgpa_input.text():
-            cgpa_valid, current_cgpa = self.validate_numeric_input(
-                self.cgpa_input.text(), "CGPA", is_float=True
-            )
-        
-        if self.credits_input.text():
-            credits_valid, completed_credits = self.validate_numeric_input(
-                self.credits_input.text(), "Completed Credits"
-            )
+        # Calculate GPA
+        if total_credits > 0:
+            gpa = total_quality_points / total_credits
+            self.gpa_label.setText(f"{gpa:.2f}")
+        else:
+            self.gpa_label.setText("0.00")
+            gpa = 0
 
+        # Validate inputs before CGPA calculation
+        cgpa_valid, current_cgpa = self.validate_numeric_input(
+            self.cgpa_input.text(), "CGPA", is_float=True
+        )
+        
+        credits_valid, completed_credits = self.validate_numeric_input(
+            self.credits_input.text(), "Completed Credits"
+        )
+
+        # Only calculate CGPA if we have valid inputs
         if cgpa_valid and credits_valid:
             try:
                 total_completed = completed_credits + total_credits
-                overall_points = current_cgpa * completed_credits + gpa * total_credits
-                new_cgpa = overall_points / total_completed if total_completed > 0 else 0
-                self.total_credits_label.setText(str(total_completed))
-                self.cgpa_label.setText(f"{new_cgpa:.2f}")
-            except:
+                if total_completed > 0:
+                    overall_points = current_cgpa * completed_credits + gpa * total_credits
+                    new_cgpa = overall_points / total_completed
+                    self.total_credits_label.setText(str(total_completed))
+                    self.cgpa_label.setText(f"{new_cgpa:.2f}")
+                else:
+                    self.total_credits_label.setText("0")
+                    self.cgpa_label.setText("0.00")
+            except ZeroDivisionError:
                 self.total_credits_label.setText(str(total_credits))
                 self.cgpa_label.setText(f"{gpa:.2f}")
         else:
+            # Show only semester results if CGPA inputs are invalid
             self.total_credits_label.setText(str(total_credits))
             self.cgpa_label.setText(f"{gpa:.2f}")
 
