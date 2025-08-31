@@ -1,59 +1,35 @@
 import sys
+import os
+import re
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton,
     QHBoxLayout, QFileDialog, QMessageBox, QGridLayout, QStackedWidget
 )
-from PyQt5.QtGui import QPixmap, QFont, QPainter, QBrush # Graphics handling
-from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent # Core Qt functionality
+from PyQt5.QtGui import QPixmap, QFont, QPainter, QBrush
+from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent
 
 from styles.styles import *
-from room_booking_function.room_booking import *
+from login import LoginWidget 
+from database.db_manager import get_connection
 
-#Create class to enable reusability because if function need to use public variable to keep track
-# self is used in class methods to refer to the current instance of the class (to avoid global settings), can be call by using passed references 
-class FeatureButton(QPushButton): 
-    def __init__(self, icon_path, text, parent=None):
-        super().__init__(parent) # Initialize QPushButton
-        self.setObjectName("FeatureButton") # CSS identifier
-        self.setFixedSize(350, 350)
-        self.setCursor(Qt.PointingHandCursor) # Mouse cursor style
-
-        # Container for icon + text
-        container = QWidget(self)
-        container.setGeometry(0, 0, 350, 350)
-
-        layout = QVBoxLayout(container) # Vertical layout
-        layout.setContentsMargins(70, 70, 70, 70) # Padding
-        layout.setSpacing(10)
-
-        # Icon setup
-        icon_label = QLabel()
-        icon_label.setObjectName("iconLabel")
-        icon_pixmap = QPixmap(icon_path).scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation) # Load/resize image
-        icon_label.setPixmap(icon_pixmap) # Display icon
-        icon_label.setAlignment(Qt.AlignCenter)
-
-        text_label = QLabel(text)
-        text_label.setObjectName("textLabel")
-        text_label.setWordWrap(True)  # breaking long lines of text into multiple lines
-        text_label.setAlignment(Qt.AlignCenter) 
-
-        # Widget: Any visual element (buttons, labels, layouts, etc.)
-        # Add widget insert all the visual element to the layout
-        layout.addWidget(icon_label)
-        layout.addWidget(text_label)
+# Update these imports to match the new file structure
+from room_booking_function.location_selection import LocationSelectionWidget
+from room_booking_function.room_booking_widget import RoomBookingWidget
+from room_booking_function.feature_button import FeatureButton
 
 class SlidingMenu(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("slidingMenu")
         self.setFixedWidth(350)
+        self.is_logged_in = False
+        self.current_user_id = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 40, 0, 0)
-        layout.setSpacing(0) 
+        layout.setSpacing(0)
 
-        profile_widget = QWidget() # Profile picture holder
+        profile_widget = QWidget()
         profile_widget.setObjectName("profileWidget")
         profile_layout = QVBoxLayout(profile_widget)
         profile_layout.setContentsMargins(0, 70, 0, 70)
@@ -63,9 +39,9 @@ class SlidingMenu(QWidget):
         self.avatar.setFixedSize(150, 150)
         self.avatar.setAlignment(Qt.AlignCenter)
         self.avatar.setCursor(Qt.PointingHandCursor)
-        self.avatar.mousePressEvent = self.upload_avatar
 
-        self.default_avatar = QPixmap(150, 150) ## Fallback image
+        # Create default avatar
+        self.default_avatar = QPixmap(150, 150)
         self.default_avatar.fill(Qt.transparent)
         painter = QPainter(self.default_avatar)
         painter.setBrush(QBrush(Qt.gray))
@@ -77,14 +53,14 @@ class SlidingMenu(QWidget):
         painter.end()
         self.avatar.setPixmap(self.default_avatar)
 
-        name_label = QLabel("John Doe")
-        name_label.setObjectName("profileName")
-        id_label = QLabel("ID: S1234567")
-        id_label.setObjectName("profileID")
+        self.name_label = QLabel("Please Login")
+        self.name_label.setObjectName("profileName")
+        self.id_label = QLabel("ID: Not logged in")
+        self.id_label.setObjectName("profileID")
 
         profile_layout.addWidget(self.avatar, 0, Qt.AlignCenter)
-        profile_layout.addWidget(name_label, 0, Qt.AlignCenter)
-        profile_layout.addWidget(id_label, 0, Qt.AlignCenter)
+        profile_layout.addWidget(self.name_label, 0, Qt.AlignCenter)
+        profile_layout.addWidget(self.id_label, 0, Qt.AlignCenter)
         layout.addWidget(profile_widget)
 
         menu_items = [
@@ -103,49 +79,87 @@ class SlidingMenu(QWidget):
                 btn.clicked.connect(self.show_logout_dialog)
             elif action == "home":
                 btn.clicked.connect(self.go_to_home)
+            else:
+                btn.clicked.connect(lambda checked, a=action: self.handle_menu_action(a))
             layout.addWidget(btn)
 
-        layout.addStretch() #Pushes content upward
+        layout.addStretch()
 
-    def upload_avatar(self, event):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Profile Picture", "",
-                                                   "Images (*.png *.jpg *.jpeg *.bmp *.gif)")
-        if file_path:
-            self.load_avatar(file_path)
-
-    def load_avatar(self, path):
-        pixmap = QPixmap(path)
-        if not pixmap.isNull():
-            circular = QPixmap(150, 150)
-            circular.fill(Qt.transparent)
-            painter = QPainter(circular)
-            painter.setRenderHint(QPainter.Antialiasing)
-            painter.setBrush(QBrush(pixmap.scaled(150, 150, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)))
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(0, 0, 150, 150)
-            painter.end()
-            self.avatar.setPixmap(circular)
+    def handle_menu_action(self, action):
+        """Handle menu actions that require login"""
+        if not self.is_logged_in:
+            QMessageBox.warning(self, "Login Required", 
+                               "Please login first to access this feature.")
+            return
+        print(f"Menu action: {action}")
 
     def show_logout_dialog(self):
+        if not self.is_logged_in:
+            QMessageBox.information(self, "Already Logged Out", 
+                                   "You are already logged out. Please login first.")
+            return
+            
         reply = QMessageBox.question(self, "Logout",
                                      "Are you sure you want to log out?",
                                      QMessageBox.Yes | QMessageBox.No,
                                      QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.parent().close()
-    
+            self.parent().logout()
+
     def go_to_home(self):
-        # Access the parent MainWindow and switch to home page
+        if not self.is_logged_in:
+            QMessageBox.warning(self, "Login Required", 
+                               "Please login first to access the home page.")
+            return
+            
         main_window = self.parent()
         if isinstance(main_window, MainWindow):
             main_window.pages.setCurrentWidget(main_window.feature_grid_page)
-            main_window.hide_menu()  # Also hide the menu when navigating
+            main_window.hide_menu()
 
+    def load_profile_picture(self, profile_picture_filename):
+        """Load profile picture from Photo directory based on filename from database"""
+        if profile_picture_filename:
+            image_path = f"Photo/{profile_picture_filename}"
+            if os.path.exists(image_path):
+                pixmap = QPixmap(image_path)
+                if not pixmap.isNull():
+                    # Create circular avatar
+                    circular = QPixmap(150, 150)
+                    circular.fill(Qt.transparent)
+                    painter = QPainter(circular)
+                    painter.setRenderHint(QPainter.Antialiasing)
+                    painter.setBrush(QBrush(pixmap.scaled(150, 150, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)))
+                    painter.setPen(Qt.NoPen)
+                    painter.drawEllipse(0, 0, 150, 150)
+                    painter.end()
+                    self.avatar.setPixmap(circular)
+                    return
+        
+        # If no image found, use default avatar
+        self.avatar.setPixmap(self.default_avatar)
+
+    def update_profile_info(self, name, student_id):
+        """Update profile information with user data"""
+        self.name_label.setText(name)
+        self.id_label.setText(f"ID: {student_id}")
+        self.is_logged_in = True
+        self.current_user_id = student_id
+        
+        # Load profile picture from database filename
+        from database.db_manager import get_profile_picture
+        profile_picture_filename = get_profile_picture(student_id)
+        self.load_profile_picture(profile_picture_filename)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.user_id = 1001 #Temporary set Only
+        # Initialize database tables
+        self.initialize_database()
+        
+        self.user_id = None
+        self.user_name = None
+        
         self.setWindowTitle("Student Assistant")
         self.setFixedSize(800, 900)
 
@@ -165,7 +179,8 @@ class MainWindow(QMainWindow):
         self.menu_btn.setStyleSheet(get_menu_button_style())
         self.menu_btn.setFixedSize(40, 40)
         self.menu_btn.setCursor(Qt.PointingHandCursor)
-        self.menu_btn.clicked.connect(self.toggle_menu) #Connect to the toggle menu function
+        self.menu_btn.clicked.connect(self.toggle_menu)
+        self.menu_btn.setVisible(False)  # Hide menu button initially
 
         title = QLabel("Student Assistant")
         title.setAlignment(Qt.AlignCenter)
@@ -175,22 +190,74 @@ class MainWindow(QMainWindow):
         header_layout.addStretch()
         main_layout.addWidget(header)
 
-        self.pages = QStackedWidget() # QStackedWidget is used to switch between different pages (views)
+        self.pages = QStackedWidget()
         main_layout.addWidget(self.pages)
 
-        self.feature_grid_page = self.create_feature_grid() #Connect with the function
-        self.pages.addWidget(self.feature_grid_page)
+        # Create login page first
+        self.login_page = LoginWidget(self)
+        self.login_page.login_successful.connect(self.handle_login_success)
+        self.pages.addWidget(self.login_page)
 
-        # Initialize location selection page
-        self.location_selection_page = LocationSelectionWidget(self)
-        self.pages.addWidget(self.location_selection_page)
-
+        # Initialize main app pages (will be created after login)
+        self.feature_grid_page = None
+        self.location_selection_page = None
+        
+        # Initialize sliding menu (but keep it hidden until login)
         self.sliding_menu = SlidingMenu(self)
-        self.sliding_menu.move(-self.sliding_menu.width(), 60) #Places it offscreen initially (hidden).
-        self.sliding_menu.setFixedHeight(self.height() - 60) #Starts from top offset of 60px (to stay below header)
-        self.menu_shown = False # track whether the menu is currently shown or hidden
+        self.sliding_menu.move(-self.sliding_menu.width(), 60)
+        self.sliding_menu.setFixedHeight(self.height() - 60)
+        self.menu_shown = False
 
-        self.installEventFilter(self) #clicking outside the menu to hide it
+        self.installEventFilter(self)
+        
+        # Show login page first
+        self.pages.setCurrentWidget(self.login_page)
+
+    def initialize_database(self):
+        """Initialize database tables if they don't exist"""
+        try:
+            # Just check if database is accessible
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+            table_count = cursor.fetchone()[0]
+            conn.close()
+            
+            if table_count == 0:
+                print("Database appears empty. Please run init_db.py first!")
+                QMessageBox.warning(self, "Database Error", 
+                                  "Database is empty. Please run init_db.py to initialize the database.")
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            QMessageBox.critical(self, "Database Error", 
+                               f"Could not initialize database: {str(e)}")
+
+    def handle_login_success(self, student_id, name):
+        """Handle successful login"""
+        self.user_id = student_id
+        self.user_name = name
+        
+        # Initialize main app pages
+        self.initialize_main_app()
+        
+        # Update profile info in sliding menu
+        self.sliding_menu.update_profile_info(name, student_id)
+        
+        # Show menu button
+        self.menu_btn.setVisible(True)
+        
+        # Switch to main app
+        self.pages.setCurrentWidget(self.feature_grid_page)
+
+    def initialize_main_app(self):
+        """Initialize main application pages after login"""
+        if self.feature_grid_page is None:
+            self.feature_grid_page = self.create_feature_grid()
+            self.pages.addWidget(self.feature_grid_page)
+            
+        if self.location_selection_page is None:
+            self.location_selection_page = LocationSelectionWidget(self)
+            self.pages.addWidget(self.location_selection_page)
 
     def create_feature_grid(self):
         page = QWidget()
@@ -209,15 +276,16 @@ class MainWindow(QMainWindow):
         ]
 
         for i, (icon, text) in enumerate(features):
-            btn = FeatureButton(icon, text)
-            btn.clicked.connect(lambda checked, t=text: self.handle_feature_click(t)) #Connects the button’s click signal to the handle_feature_click() method
-            row = i // 2 #This creates 2 columns per row.
-            col = i % 2 #Determines the column for the grid layout.
+            # Use "main" size type for main page
+            btn = FeatureButton(icon, text, size_type="main")
+            btn.clicked.connect(lambda checked, t=text: self.handle_feature_click(t))
+            row = i // 2
+            col = i % 2
             grid_layout.addWidget(btn, row, col)
 
         layout.addLayout(grid_layout)
         layout.addStretch()
-        return page #Returns the complete QWidget page that holds the feature grid
+        return page
 
     def handle_feature_click(self, feature_name):
         if feature_name == "Room Booking":
@@ -228,18 +296,24 @@ class MainWindow(QMainWindow):
             print(f"{feature_name} clicked!")
 
     def toggle_menu(self):
+        # Don't show menu if not logged in
+        if not self.user_id:
+            QMessageBox.information(self, "Login Required", 
+                                   "Please login first to access the menu.")
+            return
+            
         if self.menu_shown:
             self.hide_menu()
         else:
             self.show_menu()
 
     def show_menu(self):
-        self.anim = QPropertyAnimation(self.sliding_menu, b"pos") #Creates a new animation object that targets the position
-        self.anim.setDuration(300) #The animation lasts for 300 milliseconds
-        self.anim.setEasingCurve(QEasingCurve.OutQuad) #Applies a smooth easing curve — it starts quickly and slows down near the end.
-        self.anim.setStartValue(self.sliding_menu.pos()) #Sets the starting position as wherever the menu currently is.
-        self.anim.setEndValue(QPoint(0, 60)) #The ending position is (0, 60) — meaning it slides into view from the left and aligns just below the top header 
-        self.anim.start() #Starts the animation.
+        self.anim = QPropertyAnimation(self.sliding_menu, b"pos")
+        self.anim.setDuration(300)
+        self.anim.setEasingCurve(QEasingCurve.OutQuad)
+        self.anim.setStartValue(self.sliding_menu.pos())
+        self.anim.setEndValue(QPoint(0, 60))
+        self.anim.start()
         self.menu_shown = True
 
     def hide_menu(self):
@@ -247,7 +321,7 @@ class MainWindow(QMainWindow):
         self.anim.setDuration(300)
         self.anim.setEasingCurve(QEasingCurve.OutQuad)
         self.anim.setStartValue(self.sliding_menu.pos())
-        self.anim.setEndValue(QPoint(-self.sliding_menu.width(), 60)) #Slides the menu leftward out of view by setting the to negative its own width.
+        self.anim.setEndValue(QPoint(-self.sliding_menu.width(), 60))
         self.anim.start()
         self.menu_shown = False
 
@@ -259,19 +333,47 @@ class MainWindow(QMainWindow):
     
     def open_room_booking_page(self, location_id):
         # Clean up previous booking widget if exists
-        if hasattr(self, 'room_booking_widget_by_location'): #Check if exist 
-            self.pages.removeWidget(self.room_booking_widget_by_location) #Remove from UI
-            self.room_booking_widget_by_location.deleteLater() #Schedule deletion
+        if hasattr(self, 'room_booking_widget_by_location'):
+            self.pages.removeWidget(self.room_booking_widget_by_location)
+            self.room_booking_widget_by_location.deleteLater()
 
-        """Why need to clean up
-        Prevents Memory Leaks: Each time you create a new RoomBookingWidget, it consumes memory. 
-        Without cleanup, old widgets remain in memory."""
-
-        # Create and show new booking page
-        self.room_booking_widget_by_location = RoomBookingWidget(self, location_id)
+        # Create and show new booking page with user_id
+        self.room_booking_widget_by_location = RoomBookingWidget(self, location_id, self.user_id)
         self.pages.addWidget(self.room_booking_widget_by_location)
         self.pages.setCurrentWidget(self.room_booking_widget_by_location)
 
+    def logout(self):
+        # Reset user info
+        self.user_id = None
+        self.user_name = None
+        
+        # Reset profile info
+        self.sliding_menu.name_label.setText("Please Login")
+        self.sliding_menu.id_label.setText("ID: Not logged in")
+        self.sliding_menu.is_logged_in = False
+        self.sliding_menu.current_user_id = None
+        self.sliding_menu.avatar.setPixmap(self.sliding_menu.default_avatar)
+        
+        # Hide menu button when logged out
+        self.menu_btn.setVisible(False)
+        
+        # Clear main app pages
+        if self.feature_grid_page:
+            self.pages.removeWidget(self.feature_grid_page)
+            self.feature_grid_page.deleteLater()
+            self.feature_grid_page = None
+            
+        if self.location_selection_page:
+            self.pages.removeWidget(self.location_selection_page)
+            self.location_selection_page.deleteLater()
+            self.location_selection_page = None
+        
+        # Hide menu
+        self.hide_menu()
+        
+        # Show login page
+        self.pages.setCurrentWidget(self.login_page)
+        self.login_page.clear_form()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
