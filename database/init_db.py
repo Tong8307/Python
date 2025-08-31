@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     date TEXT NOT NULL,
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
-    status TEXT CHECK(status IN ('booked', 'cancelled')) NOT NULL DEFAULT 'booked',
+    status TEXT CHECK(status IN ('booked', 'cancelled', 'completed')) NOT NULL DEFAULT 'booked',
     created_by TEXT NOT NULL,
     FOREIGN KEY (room_id) REFERENCES rooms(id),
     FOREIGN KEY (created_by) REFERENCES users(student_id)
@@ -103,7 +103,13 @@ cursor.executemany("INSERT OR IGNORE INTO rooms (id, location_id, capacity, name
     ('R201', 2, 4, 'Room L222', 'F03'),
     ('R202', 2, 10, 'Room L888', 'F04'),
     ('R301', 3, 5, 'Room A012', 'F05'),
-    ('R302', 3, 12, 'Room A125', 'F05')
+    ('R302', 3, 12, 'Room A125', 'F05'),
+    ('R303', 3, 5, 'Room A012', 'F02'),
+    ('R304', 3, 10, 'Room A124', 'F01'),
+    ('R305', 3, 2, 'Room A028', 'F03'),
+    ('R306', 3, 3, 'Room A129', 'F04'),
+    ('R307', 3, 6, 'Room A038', 'F02'),
+    ('R308', 3, 5, 'Room A175', 'F03')
 ])
 
 # Insert Users with hashed passwords

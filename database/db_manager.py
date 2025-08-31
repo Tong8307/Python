@@ -190,16 +190,56 @@ def create_booking_with_students(created_by, room_id, date, start, end, student_
     finally:
         conn.close()
 
-def get_bookings_by_user(student_id):
+def get_booking_creator(booking_id):
+    """Get the creator (student_id) of a booking"""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT b.id, r.name, b.date, b.start_time, b.end_time, b.status
-        FROM bookings b
-        JOIN rooms r ON b.room_id = r.id
-        WHERE b.created_by = ?
-        ORDER BY b.date, b.start_time
-    ''', (student_id,))
+    cursor.execute("SELECT created_by FROM bookings WHERE id = ?", (booking_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+def get_bookings_by_user(student_id, location_id=None):
+    """Get bookings for a user (both created by and participated in), optionally filtered by location"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    if location_id:
+        # Filter by specific location - include both created by AND participated in
+        cursor.execute('''
+            SELECT DISTINCT b.id, r.name, b.date, b.start_time, b.end_time, b.status
+            FROM bookings b
+            JOIN rooms r ON b.room_id = r.id
+            JOIN booking_students bs ON b.id = bs.booking_id
+            WHERE (b.created_by = ? OR bs.student_id = ?) 
+            AND r.location_id = ?
+            ORDER BY 
+                CASE 
+                    WHEN b.status = 'booked' THEN 1
+                    WHEN b.status = 'completed' THEN 2
+                    WHEN b.status = 'cancelled' THEN 3
+                END,
+                b.date DESC,
+                b.start_time DESC
+        ''', (student_id, student_id, location_id))
+    else:
+        # Get all bookings (no location filter) - include both created by AND participated in
+        cursor.execute('''
+            SELECT DISTINCT b.id, r.name, b.date, b.start_time, b.end_time, b.status
+            FROM bookings b
+            JOIN rooms r ON b.room_id = r.id
+            JOIN booking_students bs ON b.id = bs.booking_id
+            WHERE b.created_by = ? OR bs.student_id = ?
+            ORDER BY 
+                CASE 
+                    WHEN b.status = 'booked' THEN 1
+                    WHEN b.status = 'completed' THEN 2
+                    WHEN b.status = 'cancelled' THEN 3
+                END,
+                b.date DESC,
+                b.start_time DESC
+        ''', (student_id, student_id))
+    
     result = cursor.fetchall()
     conn.close()
     return result
@@ -217,6 +257,30 @@ def delete_booking(booking_id):
     cursor.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
     conn.commit()
     conn.close()
+
+
+def update_expired_bookings():
+    """Update bookings that have passed to 'completed' status"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Get current date and time
+    from datetime import datetime
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_time = datetime.now().strftime("%H:%M")
+    
+    # Update bookings where date is in past OR date is today but end_time has passed
+    cursor.execute('''
+        UPDATE bookings 
+        SET status = 'completed' 
+        WHERE status = 'booked' 
+        AND (date < ? OR (date = ? AND end_time <= ?))
+    ''', (current_date, current_date, current_time))
+    
+    conn.commit()
+    conn.close()
+    return cursor.rowcount  # Return number of updated bookings
+
 
 # -----------------
 # BOOKING STUDENTS
@@ -277,7 +341,7 @@ def check_room_availability(room_id, date, start, end):
     cursor = conn.cursor()
     cursor.execute('''
         SELECT id FROM bookings 
-        WHERE room_id = ? AND date = ?
+        WHERE room_id = ? AND date = ? AND status = 'booked'
         AND ((start_time < ? AND end_time > ?) OR 
              (start_time >= ? AND start_time < ?))
     ''', (room_id, date, end, start, start, end))
@@ -295,7 +359,7 @@ def find_best_available_room(location_id, feature_id, min_capacity, date, start,
         WHERE r.location_id = ? AND r.feature_id = ? AND r.capacity >= ?
         AND r.id NOT IN (
             SELECT room_id FROM bookings 
-            WHERE date = ? 
+            WHERE date = ? AND status = 'booked'
             AND ((start_time < ? AND end_time > ?) OR 
                  (start_time >= ? AND start_time < ?))
         )
@@ -303,5 +367,37 @@ def find_best_available_room(location_id, feature_id, min_capacity, date, start,
         LIMIT 1
     ''', (location_id, feature_id, min_capacity, date, end, start, start, end))
     result = cursor.fetchone()
+    conn.close()
+    return result
+
+# -----------------
+# Time Table
+# -----------------
+
+def get_bookings_for_timetable(room_id, date):
+    """Get all bookings for a room on a specific date for timetable display"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT start_time, end_time, status, created_by 
+        FROM bookings 
+        WHERE room_id = ? AND date = ? AND status = 'booked'
+        ORDER BY start_time
+    ''', (room_id, date))
+    result = cursor.fetchall()
+    conn.close()
+    return result
+
+def get_rooms_by_location(location_id):
+    """Get all rooms for a specific location"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, name, capacity 
+        FROM rooms 
+        WHERE location_id = ?
+        ORDER BY name
+    ''', (location_id,))
+    result = cursor.fetchall()
     conn.close()
     return result

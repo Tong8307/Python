@@ -34,6 +34,7 @@ class NewBookingPage(QWidget):
         # Header
         title = QLabel(f"New Booking: {self.location_name}")
         title.setObjectName("bookingHeader")
+        title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
         # Initialize time widgets first
@@ -66,11 +67,6 @@ class NewBookingPage(QWidget):
         # Apply styles
         self.apply_styles()
         
-        # Setup validation timer
-        self.validation_timer = QTimer()
-        self.validation_timer.timeout.connect(self.validate_form)
-        self.validation_timer.start(500)
-        
     def apply_styles(self):
         """Apply the CSS styles to all widgets"""
         self.setStyleSheet(get_booking_styles())
@@ -88,17 +84,22 @@ class NewBookingPage(QWidget):
         
     def setup_booking_form(self, layout):
         """Setup the actual booking form components"""
-        # Feature selection
+
+        # ---------- Feature selection ----------
         feature_label = QLabel("Select Feature:")
         feature_label.setObjectName("formLabel")
         self.feature_combo = QComboBox()
         self.feature_combo.setObjectName("featureCombo")
         self.load_features()
         self.feature_combo.currentIndexChanged.connect(self.update_room_info)
-        layout.addWidget(feature_label)
-        layout.addWidget(self.feature_combo)
 
-        # Number of students (limited to 10)
+        feature_group = QVBoxLayout()
+        feature_group.setSpacing(0)
+        feature_group.addWidget(feature_label)
+        feature_group.addWidget(self.feature_combo)
+        layout.addLayout(feature_group)
+
+        # ---------- Number of students ----------
         students_label = QLabel("Number of Students (including yourself, max 10):")
         students_label.setObjectName("formLabel")
         self.students_spin = QSpinBox()
@@ -107,49 +108,49 @@ class NewBookingPage(QWidget):
         self.students_spin.setMaximum(10)
         self.students_spin.setValue(1)
         self.students_spin.valueChanged.connect(self.on_student_count_changed)
-        layout.addWidget(students_label)
-        layout.addWidget(self.students_spin)
 
-        # Date selection
+        students_group = QVBoxLayout()
+        students_group.setSpacing(0)
+        students_group.addWidget(students_label)
+        students_group.addWidget(self.students_spin)
+        layout.addLayout(students_group)
+
+        # ---------- Date selection ----------
         date_label = QLabel("Booking Date:")
         date_label.setObjectName("formLabel")
         self.date_edit.setDisplayFormat("yyyy-MM-dd")
         self.date_edit.setMinimumDate(QDate.currentDate())
         self.date_edit.setCalendarPopup(True)
         self.date_edit.dateChanged.connect(self.update_room_info)
-        layout.addWidget(date_label)
-        layout.addWidget(self.date_edit)
 
-        # Time selection - Only allow specific time slots
+        date_group = QVBoxLayout()
+        date_group.setSpacing(0)
+        date_group.addWidget(date_label)
+        date_group.addWidget(self.date_edit)
+        layout.addLayout(date_group)
+
+        # ---------- Time selection ----------
         time_layout = QHBoxLayout()
-        
+
         start_label = QLabel("Start Time:")
         start_label.setObjectName("formLabel")
         self.start_time.setDisplayFormat("HH:mm")
         self.start_time.setTime(QTime(8, 0))  # Default to 08:00
         self.start_time.timeChanged.connect(self.on_time_changed)
-        
+
         end_label = QLabel("End Time:")
         end_label.setObjectName("formLabel")
         self.end_time.setDisplayFormat("HH:mm")
         self.end_time.setTime(QTime(10, 0))  # Default to 10:00
         self.end_time.timeChanged.connect(self.on_time_changed)
-        
+
         time_layout.addWidget(start_label)
         time_layout.addWidget(self.start_time)
         time_layout.addWidget(end_label)
         time_layout.addWidget(self.end_time)
         layout.addLayout(time_layout)
 
-        # Room information (read-only)
-        room_label = QLabel("Assigned Room:")
-        room_label.setObjectName("formLabel")
-        self.room_info = QLabel("Please select feature, date and time")
-        self.room_info.setObjectName("roomInfo")
-        layout.addWidget(room_label)
-        layout.addWidget(self.room_info)
-
-        # Student inputs section
+        # ---------- Student information section ----------
         student_section_label = QLabel("Student Information:")
         student_section_label.setObjectName("formLabel")
         layout.addWidget(student_section_label)
@@ -161,55 +162,29 @@ class NewBookingPage(QWidget):
         self.student_scroll.setMaximumHeight(300)
         self.student_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.student_scroll.setObjectName("studentScroll")
-        
+
         self.student_container = QWidget()
         self.student_layout = QVBoxLayout(self.student_container)
         self.student_layout.setSpacing(10)
         self.student_layout.setContentsMargins(5, 5, 5, 5)
-        
+
         self.student_scroll.setWidget(self.student_container)
         layout.addWidget(self.student_scroll)
 
         # Initialize student inputs
         self.update_student_inputs(1)
 
-        # Terms and conditions checkbox
+        # ---------- Terms checkbox ----------
         self.terms_checkbox = QCheckBox("I have read and agree to the booking guidelines")
         self.terms_checkbox.setObjectName("termsCheckbox")
         layout.addWidget(self.terms_checkbox)
-        
-        # Submit button
+
+        # ---------- Submit button ----------
         submit_btn = QPushButton("Submit Booking")
         submit_btn.setObjectName("submitButton")
         submit_btn.clicked.connect(self.submit_booking)
         layout.addWidget(submit_btn, 0, Qt.AlignCenter)
 
-    def validate_form(self):
-        """Continuously validate form and update UI accordingly"""
-        # Check if all required fields are filled
-        is_valid = bool(self.feature_combo.currentData() and 
-                       self.selected_room_id and 
-                       self.terms_checkbox.isChecked())
-        
-        # Enable/disable submit button based on validity
-        submit_btn = self.findChild(QPushButton, "submitButton")
-        if submit_btn:
-            submit_btn.setEnabled(is_valid)
-            
-        # Add error styling to invalid fields
-        self.update_field_styles()
-    
-    def update_field_styles(self):
-        """Update field styles based on validation state"""
-        # Add error class to terms checkbox if not checked
-        if not self.terms_checkbox.isChecked():
-            self.terms_checkbox.setProperty("class", "error")
-        else:
-            self.terms_checkbox.setProperty("class", "")
-        
-        # Refresh styles
-        self.style().unpolish(self.terms_checkbox)
-        self.style().polish(self.terms_checkbox)
 
     def on_time_changed(self):
         """Handle time changes and enforce specific time intervals"""
@@ -347,12 +322,11 @@ class NewBookingPage(QWidget):
             QMessageBox.warning(self, "Error", f"Could not load features: {str(e)}")
 
     def update_room_info(self):
-        """Find and display the best available room based on selection"""
+        """Find the best available room based on selection (internal use only)"""
         feature_id = self.feature_combo.currentData()
         num_students = self.students_spin.value()
         
         if not feature_id:
-            self.room_info.setText("Please select a feature")
             self.selected_room_id = None
             return
             
@@ -377,18 +351,14 @@ class NewBookingPage(QWidget):
                     self.selected_room_id = room_id
                     self.selected_room_name = room_name
                     self.selected_room_capacity = capacity
-                    self.room_info.setText(f"{room_name} (Capacity: {capacity})")
                 else:
                     self.selected_room_id = None
-                    self.room_info.setText("Room just became unavailable")
             else:
                 self.selected_room_id = None
-                self.room_info.setText("No available rooms for selected criteria")
                 
         except sqlite3.Error as e:
             QMessageBox.warning(self, "Error", f"Could not find available room: {str(e)}")
             self.selected_room_id = None
-            self.room_info.setText("Error finding available room")
 
     def validate_students(self):
         """Validate that all student IDs exist in the database and are filled"""
