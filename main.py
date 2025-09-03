@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QFont, QPainter, QBrush # Graphics handling
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent # Core Qt functionality
 
+from notes_organizer_function.dashboard import DashboardWidget
 from notes_organizer_function.notes_organizer import NoteOrganizerWidget
 from styles.styles import *
 from room_booking_function.room_booking import *
@@ -226,11 +227,13 @@ class MainWindow(QMainWindow):
     def handle_feature_click(self, feature_name):
         if feature_name == "Room Booking":
             self.pages.setCurrentWidget(self.location_selection_page)
+
         elif feature_name == "Note Organizer":
-            if not hasattr(self, 'note_organizer_page'):
-                self.note_organizer_page = NoteOrganizerWidget(self)
-                self.pages.addWidget(self.note_organizer_page)
-            self.pages.setCurrentWidget(self.note_organizer_page)
+            if not hasattr(self, 'dashboard_page'): 
+                self.dashboard_page = DashboardWidget(on_add_note_clicked=self.open_notes_page)
+                self.pages.addWidget(self.dashboard_page)
+            self.pages.setCurrentWidget(self.dashboard_page)
+
         else:
             print(f"{feature_name} clicked!")
 
@@ -278,6 +281,17 @@ class MainWindow(QMainWindow):
         self.room_booking_widget_by_location = RoomBookingWidget(self, location_id)
         self.pages.addWidget(self.room_booking_widget_by_location)
         self.pages.setCurrentWidget(self.room_booking_widget_by_location)
+
+    def open_notes_page(self):
+        if not hasattr(self, 'notes_page'):
+            self.notes_page = NoteOrganizerWidget(on_return_callback=self.back_to_dashboard)
+            self.pages.addWidget(self.notes_page)
+            self.pages.setCurrentWidget(self.notes_page)
+
+    def back_to_dashboard(self):
+        self.pages.setCurrentWidget(self.dashboard_page)
+
+
 
 
 if __name__ == '__main__':

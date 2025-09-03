@@ -6,34 +6,52 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 
+
 class NoteOrganizerWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, on_return_callback=None):
         super().__init__(parent)
         self.notes = {}
+        self.on_return_callback = on_return_callback  # callback for return button
         self.load_notes()
 
         main_layout = QVBoxLayout(self)
 
-        # Button layout
+        # --- Top button layout (Return + New + Delete) ---
         button_layout = QHBoxLayout()
+
+        # Return button
+        self.return_button = QPushButton("← Return to Dashboard")
+        self.return_button.clicked.connect(self.handle_return)
+        self.return_button.setStyleSheet("background-color: #6c757d; color: white; font-weight: bold; padding: 6px;")
+
+        # New note button
         self.new_button = QPushButton("New Note")
         self.new_button.clicked.connect(self.add_note)
         self.new_button.setStyleSheet("background-color: #5bc0de; color: white; font-weight: bold; padding: 6px;")
 
+        # Delete button
         self.delete_button = QPushButton("Delete")
         self.delete_button.clicked.connect(self.delete_note)
         self.delete_button.setStyleSheet("background-color: #0275d8; color: white; font-weight: bold; padding: 6px;")
 
+        # Add buttons to layout
+        button_layout.addWidget(self.return_button)
+        button_layout.addStretch()
         button_layout.addWidget(self.new_button)
         button_layout.addWidget(self.delete_button)
         main_layout.addLayout(button_layout)
 
-        # Notebook setup
+        # --- Notebook setup ---
         self.notebook = QTabWidget()
         self.notebook.setStyleSheet("QTabBar::tab { font: bold 14px; padding: 8px; }")
         main_layout.addWidget(self.notebook)
 
         self.load_notes_into_tabs()
+
+    def handle_return(self):
+        """Go back to dashboard when return button is pressed"""
+        if self.on_return_callback:
+            self.on_return_callback()
 
     def load_notes(self):
         try:
