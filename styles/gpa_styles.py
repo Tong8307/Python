@@ -5,21 +5,44 @@ def gpa_styles():
         color: #333333;
         }
 
-        /* ===== Header Styles ===== */
+        /* ===========================
+            Global + Shared
+            =========================== */
+
         QLabel#gpaHeader {
             font-size: 30px;
-            font-weight: bold;
+            font-weight: 700;
             color: #283593;
-            padding: 5px 0px 0px 5px;
+            padding: 5px 0 0 5px;
+            letter-spacing: 0.3px;
         }
 
-        /* ===== Sub Header Styles ===== */
         QLabel#gpaSubheader {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 500;
             color: #4B4B4C;
-            padding: 0px 0px 0px 10px;
-            margin-bottom: 10px;
+            padding: 0 0 0 10px;
+        }
+
+        QFrame#divider {
+            border: 1px solid #e9ecef;
+            margin: 16px 0;
+        }
+
+        QPushButton#iconBackButton {
+            background-color: #283593;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        QPushButton#iconBackButton:hover {
+            background-color: #1A237E;
+        }
+        QPushButton#iconBackButton:pressed {
+            background-color: #141b5e;
         }
 
         /* Global styles */
@@ -33,10 +56,11 @@ def gpa_styles():
 
         QGroupBox {
             font-weight: bold;
-            border: 1px solid #F3E5F5;
+            border: 2px solid #F3E5F5;
             border-radius: 5px;
             margin-top: 20px;
             padding-top: 15px;
+            background-color: white;
         }
         
         QGroupBox::title {
@@ -104,31 +128,77 @@ def gpa_styles():
 
         /* Add Course Button */
         QPushButton#addCourseButton {
-            border: 2px dashed #673AB7;
+            border: 1px solid #673AB7;
             color: #673AB7;
-            padding: 8px;
+            padding: 7px;
             font-weight: bold;
-            background-color: transparent;
+            background-color: #FFF0F5;
             font-size: 18px;
             border-radius: 8px;
+            margin-left: 15px;
         }
 
         QPushButton#addCourseButton:hover {
-            background-color: #F3E5F5;
+            background-color: #fae8ee;
         }
 
         /* Reset Button */
         QPushButton#resetButton {
-            border: 2px dashed #673AB7;
-            color: #673AB7;
-            padding: 8px;
+            border: 1px solid #3949AB;
+            color: #3949AB;
+            padding: 7px;
             font-weight: bold;
-            background-color: transparent;
+            background-color: #E6E6FA;
             font-size: 18px;
             border-radius: 8px;
         }
 
         QPushButton#resetButton:hover {
+            background-color: #DCDCF0;
+        }
+
+        /* History Button */
+        QPushButton#historyButton {
+            border: 1px solid #3949AB;
+            color: #3949AB;
+            padding: 7px;
+            font-weight: bold;
+            background-color: #E6E6FA;
+            font-size: 18px;
+            border-radius: 8px;
+        }
+
+        QPushButton#historyButton:hover {
+            background-color: #DCDCF0;
+        }
+
+        /* Save Button */
+        QPushButton#saveButton {
+            border: 2px solid #673AB7;
+            color: #673AB7;
+            padding: 7px;
+            font-weight: bold;
+            background-color: #f3e9fd;
+            font-size: 18px;
+            border-radius: 8px;
+        }
+
+        QPushButton#saveButton:hover {
+            background-color: #F3E5F5;
+        }
+
+        /* Calculate Button */
+        QPushButton#calculateButton {
+            border: 2px solid #673AB7;
+            color: #673AB7;
+            padding: 7px;
+            font-weight: bold;
+            background-color: #f3e9fd;
+            font-size: 18px;
+            border-radius: 8px;
+        }
+
+        QPushButton#calculateButton:hover {
             background-color: #F3E5F5;
         }
 
@@ -205,4 +275,63 @@ def gpa_styles():
         QScrollArea QWidget {
             background-color: transparent;
         }
+
+        /* Table styles */
+        QTableWidget {
+            background-color: #ffffff;
+            border: 1px solid #E1D7F6;
+            gridline-color: #f0f0f0;
+            alternate-background-color: #faf8fd;
+            selection-color: white;
+            font-weight: 600;
+            font-size: 14px;
+            outline: 0;
+        }
+
+        /* Table items */
+        QTableWidget::item {
+            padding: 10px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #4B4B4C;
+        }
+
+        /* Hover effect */
+        QTableWidget::item:hover {
+            background-color: #f3e9fd;
+        }
+
+        /* Header */
+        QHeaderView::section {
+            background-color: #f3e9fd;
+            color: #673AB7;
+            font-weight: bold;
+            padding: 12px;
+            border: none;
+            font-size: 17px;
+            text-align: center;
+            min-height: 40px; 
+        }
+
+        /* Scroll bar styles */
+        QScrollBar:vertical {
+            border: none;
+            background-color: #f8f9fa;
+            width: 12px;
+            margin: 0px;
+        }
+        
+        QScrollBar::handle:vertical {
+            background-color: #3949AB;
+            border-radius: 6px;
+            min-height: 20px;
+        }
+        
+        QScrollBar::handle:vertical:hover {
+            background-color: #5C6BC0;
+        }
+        
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        
     """

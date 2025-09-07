@@ -1,12 +1,15 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit,
     QComboBox, QPushButton, QSpinBox, QMessageBox, QFrame, QSizePolicy, 
-    QScrollArea, QGridLayout, QGroupBox
+    QScrollArea, QGridLayout, QGroupBox, QTableWidget, QTableWidgetItem, 
+    QHeaderView, QDialog, QStackedWidget
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIcon, QFont, QDoubleValidator, QIntValidator
 import sys
 from styles.gpa_styles import gpa_styles
+from database.db_manager import save_gpa_calculation, get_gpa_history  # Import database functions
+from .gpaHistory import GPAHistory
 
 qualityPoint = {
     "A+": 4.00, "A": 4.00, "A-": 3.67,
@@ -14,20 +17,22 @@ qualityPoint = {
     "C+": 2.33, "C": 2.00, "F": 0.00
 }
 
-class GPACalculatorWidget(QWidget):
+class GPACalculatorPage(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
-        
-        # Initialize course_rows list
+        self.current_user_id = main_window.current_user_id
         self.course_rows = []
         
         self.setStyleSheet(gpa_styles())
         self.init_ui()
         self.update_results()
-
+    
     def init_ui(self):
-        # Create result labels first with larger fonts
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(15)
+
         self.semester_credits_label = QLabel("0")
         self.gpa_label = QLabel("0.00")
         self.total_credits_label = QLabel("0")
@@ -42,29 +47,49 @@ class GPACalculatorWidget(QWidget):
         self.total_credits_label.setFont(value_font)
         self.cgpa_label.setFont(value_font)
 
-        # Create main layout for the widget
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(15, 10, 15, 10)
-        main_layout.setSpacing(15)
+        title_bar = QHBoxLayout()
 
         # Header and subheader spanning full width
         title = QLabel("GPA and CGPA Calculator")
         title.setObjectName("gpaHeader")
-        main_layout.addWidget(title)
+        title_bar.addWidget(title)
+        
+        title_bar.addStretch()
+
+        # Reset button
+        reset_btn = QPushButton("Reset")
+        reset_btn.setIcon(QIcon("Photo/reset.png"))
+        reset_btn.setObjectName("resetButton")
+        reset_btn.setFixedSize(110, 45)
+        reset_btn.clicked.connect(self.reset_all)
+        title_bar.addWidget(reset_btn)
+    
+        # History button on the right
+        history_btn = QPushButton("View History")
+        history_btn.setIcon(QIcon("Photo/history_gpa.png"))
+        history_btn.setObjectName("historyButton")
+        history_btn.setFixedSize(180, 45)
+        history_btn.clicked.connect(self.show_history)
+        title_bar.addWidget(history_btn)
+
+        # Add title bar to main layout
+        layout.addLayout(title_bar)
 
         subtitle = QLabel(
-            "To calculate your GPA, enter the Credit and select the Grade for each course/subject.\n"
+            "To calculate your GPA, enter the Credit and select the Grade for each course/ subject.\n"
             "To calculate your CGPA, enter your current CGPA and Credits Completed prior to this semester.")
         subtitle.setObjectName("gpaSubheader")
         subtitle.setWordWrap(True)
-        main_layout.addWidget(subtitle)
+        layout.addWidget(subtitle)
 
-        # Create horizontal layout for content (inputs + results)
+        # Create layout for content (inputs + results)
         content_layout = QHBoxLayout()
         content_layout.setSpacing(20)
+        layout.addLayout(content_layout)
 
         # Left side - scrollable inputs
         left_widget = QWidget()
+        left_widget.setContentsMargins(0, 0, 0, 0)
         left_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -74,6 +99,7 @@ class GPACalculatorWidget(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
         # Create a container widget for the scroll area
         container_widget = QWidget()
@@ -82,7 +108,7 @@ class GPACalculatorWidget(QWidget):
         # Container layout for scrollable content
         container_layout = QVBoxLayout(container_widget)
         container_layout.setSpacing(15)
-        container_layout.setContentsMargins(0, 0, 20, 0)
+        container_layout.setContentsMargins(0, 0, 0, 0)
 
         # Create group box for current academic status
         status_group = QGroupBox("Current Academic Status")
@@ -95,7 +121,7 @@ class GPACalculatorWidget(QWidget):
         cgpa_validator = QDoubleValidator(0.0, 4.0, 2)
         cgpa_validator.setNotation(QDoubleValidator.StandardNotation)
         
-        credits_validator = QIntValidator(0, 1000)
+        credits_validator = QIntValidator(0, 10)
         
         self.cgpa_input = QLineEdit()
         self.cgpa_input.setPlaceholderText("E.g. 3.75")
@@ -121,7 +147,7 @@ class GPACalculatorWidget(QWidget):
         
         # Course section header
         course_header = QHBoxLayout()
-        course_header.setContentsMargins(0, 0, 10, 0)
+        course_header.setContentsMargins(0, 0, 0, 0)
 
         # Courses label on the left
         course_label = QLabel("Course Name")
@@ -168,37 +194,15 @@ class GPACalculatorWidget(QWidget):
 
         container_layout.addWidget(course_group)
 
-        # Add course and reset buttons container
-        button_container = QHBoxLayout()
-        button_container.setSpacing(10)
-        
-        # Add course button
-        add_btn = QPushButton("+ Add Course")
-        add_btn.setObjectName("addCourseButton")
-        add_btn.setFixedWidth(360)
-        add_btn.clicked.connect(self.add_course_row)
-        button_container.addWidget(add_btn)
-        
-        # Reset button
-        reset_btn = QPushButton("Reset All")
-        reset_btn.setObjectName("resetButton")
-        reset_btn.setFixedWidth(175)
-        reset_btn.clicked.connect(self.reset_all)
-        button_container.addWidget(reset_btn)
-        
-        button_container.addStretch()
-        container_layout.addLayout(button_container)
-        
-        # Add scroll area to left layout
+        # Add scroll area to left layout (only the input fields will scroll)
         left_layout.addWidget(scroll_area)
-        content_layout.addWidget(left_widget, 75)  # 75% width for left side
+        content_layout.addWidget(left_widget, 85)  # 75% width for left side
         
         # Right side - fixed result card (outside the scroll area)
         result_card = QFrame()
         result_card.setObjectName("resultCard")
-        result_card.setMinimumWidth(180)
         result_card.setMaximumWidth(200)
-        result_card.setMaximumHeight(545)
+        result_card.setMaximumHeight(520)
         result_card.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         
         result_layout = QVBoxLayout(result_card)
@@ -251,18 +255,30 @@ class GPACalculatorWidget(QWidget):
         content_layout.addWidget(result_card, 25)  # 25% width for right side
         
         # Add content layout to main layout
-        main_layout.addLayout(content_layout, 1)  # 1 = stretch factor to expand
+        layout.addLayout(content_layout, 1)  # 1 = stretch factor to expand
         
-        # Back button at the bottom
-        back_btn = QPushButton()
-        back_btn.setIcon(QIcon("Photo/back.png"))
-        back_btn.setText(" Back to Home")
-        back_btn.setFixedSize(750, 40)
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setObjectName("iconBackButton")
-        back_btn.setIconSize(QSize(16, 16))
-        back_btn.clicked.connect(self.go_back)
-        main_layout.addWidget(back_btn, 0, Qt.AlignCenter)
+        # Add course and reset buttons container (OUTSIDE the scroll area)
+        button_container = QHBoxLayout()
+        button_container.setSpacing(8)
+        
+        # Save button
+        save_btn = QPushButton(" Save My Calculation")
+        save_btn.setIcon(QIcon("Photo/save.png"))
+        save_btn.setObjectName("saveButton")
+        save_btn.setFixedSize(560, 43)
+        save_btn.clicked.connect(self.save_current_calculation)
+        button_container.addWidget(save_btn)
+
+        # Add course button
+        add_btn = QPushButton("Add Course")
+        add_btn.setIcon(QIcon("Photo/plus.png"))
+        add_btn.setObjectName("addCourseButton")
+        add_btn.setFixedSize(200, 43)
+        add_btn.clicked.connect(self.add_course_row)
+        button_container.addWidget(add_btn)
+        
+        button_container.addStretch()
+        layout.addLayout(button_container)
 
     def add_course_row(self):
         row_widget = QWidget()
@@ -426,13 +442,59 @@ class GPACalculatorWidget(QWidget):
             self.total_credits_label.setText(str(total_credits))
             self.cgpa_label.setText(f"{gpa:.2f}")
 
-    def go_back(self):
-        self.main_window.pages.setCurrentWidget(self.main_window.feature_grid_page)
+    def save_current_calculation(self):
+        """Save the current calculation to the database"""
+        # Prepare courses data - ONLY include courses with names and credits > 0
+        courses_data = []
+        for name, credits, grade, widget in self.course_rows:
+            course_name = name.text().strip()
+            credit_val = credits.value()
+            
+            # Only include courses that have a name AND credits > 0
+            if course_name and credit_val > 0:
+                courses_data.append({
+                    'name': course_name,
+                    'credits': credit_val,
+                    'grade': grade.currentText()
+                })
+        
+        # Show warning if no valid courses
+        if not courses_data:
+            QMessageBox.warning(self, "No Courses", 
+                            "Please add at least one course with a name and credits.")
+            return
+        
+        # Get current values
+        semester_credits = int(self.semester_credits_label.text())
+        gpa = float(self.gpa_label.text())
+        total_credits = int(self.total_credits_label.text())
+        cgpa = float(self.cgpa_label.text())
+        
+        # Get current CGPA and completed credits inputs
+        current_cgpa = 0.0
+        completed_credits = 0
+        try:
+            if self.cgpa_input.text():
+                current_cgpa = float(self.cgpa_input.text())
+            if self.credits_input.text():
+                completed_credits = int(self.credits_input.text())
+        except ValueError:
+            pass
+        
+        # Save to database using db_manager function
+        success = save_gpa_calculation(
+            self.current_user_id, semester_credits, gpa, 
+            total_credits, cgpa, courses_data, current_cgpa, completed_credits
+        )
+        
+        if success:
+            QMessageBox.information(self, "Success", "Calculation saved to history!")
+        else:
+            QMessageBox.warning(self, "Error", "Failed to save calculation.")
 
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    from styles import load_stylesheet
-    app.setStyleSheet(load_stylesheet())
-    window = GPACalculatorWidget()
-    window.show()
-    sys.exit(app.exec_())
+    def show_history(self):
+        history_data = get_gpa_history(self.current_user_id)
+
+        history_page = GPAHistory(self.main_window, history_data, self)
+        self.main_window.pages.addWidget(history_page)
+        self.main_window.pages.setCurrentWidget(history_page)
