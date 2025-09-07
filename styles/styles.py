@@ -99,7 +99,16 @@ def load_stylesheet():
         font-size: 28px;
         font-weight: 500;
     }
+
+    QLabel#bookingHeader {
+        font-size: 30px;
+        font-weight: 700;
+        color: #283593;
+        padding: 5px 0 0 5px;
+        letter-spacing: 0.3px;
+    }
     """
+    
 
 def get_menu_button_style():
     return """

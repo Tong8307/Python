@@ -16,6 +16,8 @@ from database.db_manager import get_connection
 from room_booking_function.location_selection import LocationSelectionWidget
 from room_booking_function.room_booking_widget import RoomBookingWidget
 from room_booking_function.feature_button import FeatureButton
+from room_booking_function.guidelines import GuidelinesPage
+from room_booking_function.all_booking import AllBookingsPage
 
 class SlidingMenu(QWidget):
     def __init__(self, parent=None):
@@ -66,8 +68,8 @@ class SlidingMenu(QWidget):
         menu_items = [
             ("Home", "home"),
             ("Notes", "notes"),
-            ("Schedule", "schedule"),
-            ("Settings", "settings"),
+            ("Booking Guidelines", "Booking Guidelines"),
+            ("My Bookings (All Locations)", "all_bookings"),
             ("Logout", "logout")
         ]
 
@@ -79,6 +81,10 @@ class SlidingMenu(QWidget):
                 btn.clicked.connect(self.show_logout_dialog)
             elif action == "home":
                 btn.clicked.connect(self.go_to_home)
+            elif action == "Booking Guidelines":
+                btn.clicked.connect(self.show_guidelines)
+            elif action == "all_bookings": 
+                btn.clicked.connect(self.show_all_bookings)
             else:
                 btn.clicked.connect(lambda checked, a=action: self.handle_menu_action(a))
             layout.addWidget(btn)
@@ -151,6 +157,31 @@ class SlidingMenu(QWidget):
         profile_picture_filename = get_profile_picture(student_id)
         self.load_profile_picture(profile_picture_filename)
 
+    def show_guidelines(self):
+        """Navigate to guidelines page through main window"""
+        if not self.is_logged_in:
+            QMessageBox.warning(self, "Login Required", 
+                            "Please login first to access the guidelines.")
+            return
+            
+        main_window = self.parent()
+        if isinstance(main_window, MainWindow):
+            main_window.show_guidelines()
+
+    def show_all_bookings(self):
+        """Show all bookings across all locations"""
+        if not self.is_logged_in:
+            QMessageBox.warning(self, "Login Required", 
+                            "Please login first to view your bookings.")
+            return
+            
+        main_window = self.parent()
+        if isinstance(main_window, MainWindow):
+            main_window.hide_menu()
+            main_window.pages.setCurrentWidget(main_window.all_bookings_page)
+            # Refresh the bookings when shown
+            main_window.all_bookings_page.load_bookings()
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -208,10 +239,24 @@ class MainWindow(QMainWindow):
         self.sliding_menu.setFixedHeight(self.height() - 60)
         self.menu_shown = False
 
+        # Install event filter on the main window
         self.installEventFilter(self)
         
-        # Show login page first
-        self.pages.setCurrentWidget(self.login_page)
+        # Also install event filter on all pages to capture clicks
+        self.pages.installEventFilter(self)
+
+        # Create a transparent overlay that covers the entire window
+        self.overlay = QWidget(self)
+        self.overlay.setObjectName("menuOverlay")
+        self.overlay.setStyleSheet("background-color: rgba(0, 0, 0, 30);")  # Semi-transparent
+        self.overlay.hide()
+        self.overlay.installEventFilter(self)
+
+        self.guidelines_page = GuidelinesPage(self)
+        self.pages.addWidget(self.guidelines_page)
+
+        self.all_bookings_page = AllBookingsPage(self)
+        self.pages.addWidget(self.all_bookings_page)
 
     def initialize_database(self):
         """Initialize database tables if they don't exist"""
@@ -315,6 +360,12 @@ class MainWindow(QMainWindow):
         self.anim.setEndValue(QPoint(0, 60))
         self.anim.start()
         self.menu_shown = True
+        
+        # Show the overlay
+        self.overlay.setGeometry(0, 0, self.width(), self.height())
+        self.overlay.show()
+        self.overlay.raise_()
+        self.sliding_menu.raise_()
 
     def hide_menu(self):
         self.anim = QPropertyAnimation(self.sliding_menu, b"pos")
@@ -324,13 +375,31 @@ class MainWindow(QMainWindow):
         self.anim.setEndValue(QPoint(-self.sliding_menu.width(), 60))
         self.anim.start()
         self.menu_shown = False
+        
+        # Hide the overlay
+        self.overlay.hide()
 
     def eventFilter(self, obj, event):
-        if self.menu_shown and event.type() == QEvent.MouseButtonPress and not self.sliding_menu.geometry().contains(event.globalPos()):
-            self.hide_menu()
-            return True
+        if self.menu_shown and event.type() == QEvent.MouseButtonPress:
+            # Get the global mouse position
+            mouse_pos = event.globalPos()
+            
+            # Get the menu's geometry in global coordinates
+            menu_global_rect = self.sliding_menu.frameGeometry()
+            menu_global_rect.moveTopLeft(self.sliding_menu.mapToGlobal(QPoint(0, 0)))
+            
+            # Check if the click is outside the menu
+            if not menu_global_rect.contains(mouse_pos):
+                self.hide_menu()
+                return True
+        
         return super().eventFilter(obj, event)
     
+    def show_guidelines(self):
+        """Show guidelines page from main window"""
+        self.pages.setCurrentWidget(self.guidelines_page)
+        self.hide_menu()  # Hide the sliding menu
+            
     def open_room_booking_page(self, location_id):
         # Clean up previous booking widget if exists
         if hasattr(self, 'room_booking_widget_by_location'):

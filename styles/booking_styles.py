@@ -61,6 +61,26 @@ def get_booking_styles():
         background: transparent;
     }
 
+    /*submit Button*/
+    QPushButton#submitButton {
+        background-color: #009688;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        min-width: 670px;
+    }
+
+    QPushButton#submitButton:hover {
+        background-color: #006158;
+    }
+
+    QPushButton#submitButton:pressed {
+        background-color: #006158;
+    }
+
     /* Form labels */
     QWidget#bookingWidget QLabel#formLabel {
         font-size: 16px;
@@ -219,25 +239,137 @@ def get_booking_styles():
         border: 2px solid #4B3CBF;
     }
 
-    /* Submit button (purple theme) */
-    QWidget#bookingWidget QPushButton#submitButton {
-        background-color: #283593;
-        color: #ffffff;
+    /* Expand button for student info */
+    QWidget#bookingWidget QPushButton#expandButton {
+        background-color: #5c6bc0;
+        color: white;
         border: none;
-        border-radius: 8px;
         padding: 10px 20px;
-        font-size: 15px;
-        font-weight: 700;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
         min-width: 160px;
+        max-width: 180px;
     }
-    QWidget#bookingWidget QPushButton#submitButton:hover:enabled {
-        background-color: #1A237E;
+    
+    QWidget#bookingWidget QPushButton#expandButton:hover {
+        background-color: #3f51b5;
     }
-    QWidget#bookingWidget QPushButton#submitButton:pressed:enabled {
-        background-color: #141b5e;
+    
+    QWidget#bookingWidget QPushButton#expandButton:pressed {
+        background-color: #3949ab;
     }
-    QWidget#bookingWidget QPushButton#submitButton:disabled {
-        background-color: #c7c9f1;
-        color: #f3f3f7;
+    
+    /* ===========================
+       Student Info Page Styles (GLOBAL - outside bookingWidget)
+       =========================== */
+    QLabel#instructionsLabel {
+        font-size: 16px;
+        font-weight: 600;
+        color: #2b2f36;
+        margin: 0;
+        min-width:100px;
+        padding-bottom: 3px;
+    }
+
+    QLabel#studentNumber {
+        font-weight: bold;
+        color: #283593;
+        font-size: 16px;
+        min-width: 30px;
+        text-align: center;
+    }
+
+    /* Student Info Scroll Area - Matching booking style */
+    QScrollArea#studentScroll {
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        background: #fafafa;
+        padding: 5px;
+    }
+
+    /* Student frames in info page - matching booking style */
+    QFrame#studentFrame {
+        background: #ffffff;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        padding: 12px;
+        margin: 5px;
+    }
+
+    QFrame#studentFrame:hover {
+        border: 1px solid #cdd6ff;
+        background: #fafbff;
+    }
+
+    /* Input fields in student info page */
+    QLineEdit {
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 14px;
+        min-height: 36px;
+        background: #ffffff;
+        min-width: 150px;
+    }
+
+    QLineEdit:focus {
+        border: 2px solid #283593;
+        background: #ffffff;
+    }
+
+    QLineEdit:read-only {
+        background: #f4f6ff;
+        border: 1px solid #e1e6ff;
+        color: #1f2a56;
+    }
+
+    /* Form labels in student info page */
+    QLabel#formLabel {
+        font-size: 16px;
+        font-weight: 600;
+        color: #2b2f36;
+        margin: 0;
+        min-width:100px;
+        padding-bottom: 3px;
+    }
+
+    /* Buttons for student info page */
+    QPushButton#saveChanges {
+        background-color: #009688;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        min-width: 120px;
+    }
+
+    QPushButton#saveChanges:hover {
+        background-color: #006158;
+    }
+
+    QPushButton#saveChanges:pressed {
+        background-color: #006158;
+    }
+
+    QPushButton#cancelButton {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        min-width: 120px;
+    }
+
+    QPushButton#cancelButton:hover {
+        background-color: #5a6268;
+    }
+
+    QPushButton#cancelButton:pressed {
+        background-color: #495057;
     }
     """

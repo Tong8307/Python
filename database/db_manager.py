@@ -308,6 +308,26 @@ def get_students_in_booking(booking_id):
     conn.close()
     return result
 
+def get_bookings_by_user_all_locations(user_id):
+    """Get all bookings for a user across all locations"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT b.id, r.name, l.name, b.date, b.start_time, b.end_time, b.status
+        FROM bookings b
+        JOIN rooms r ON b.room_id = r.id
+        JOIN locations l ON r.location_id = l.id
+        WHERE b.id IN (
+            SELECT booking_id FROM booking_students WHERE student_id = ?
+            UNION
+            SELECT id FROM bookings WHERE created_by = ?
+        )
+        ORDER BY b.date DESC, b.start_time DESC
+    """, (user_id, user_id))
+    bookings = cursor.fetchall()
+    conn.close()
+    return bookings
+
 # -----------------
 # STUDENTS
 # -----------------

@@ -9,6 +9,7 @@ from database.db_manager import (get_features, find_best_available_room,
                                 check_student_exists, create_booking_with_students,
                                 get_student_name)
 from styles.booking_styles import get_booking_styles
+from room_booking_function.studentInfo import StudentInfoPage
 
 class NewBookingPage(QWidget):
     def __init__(self, main_window, location_id, location_name, user_id):
@@ -17,6 +18,11 @@ class NewBookingPage(QWidget):
         self.location_id = location_id
         self.location_name = location_name
         self.current_user_id = user_id
+        
+        # Main layout with stretch to push content to top
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
         # Create main scroll area for the entire form
         main_scroll = QScrollArea()
@@ -27,15 +33,15 @@ class NewBookingPage(QWidget):
         # Main container widget
         main_container = QWidget()
         main_container.setObjectName("bookingWidget")
-        layout = QVBoxLayout(main_container)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        container_layout = QVBoxLayout(main_container)
+        container_layout.setSpacing(20)
+        container_layout.setContentsMargins(30, 30, 30, 30)
 
         # Header
         title = QLabel(f"New Booking: {self.location_name}")
         title.setObjectName("bookingHeader")
         title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
+        container_layout.addWidget(title)
 
         # Initialize time widgets first
         self.start_time = QTimeEdit()
@@ -46,15 +52,31 @@ class NewBookingPage(QWidget):
         self.setup_time_constraints()
         
         # Booking form widgets
-        self.setup_booking_form(layout)
+        self.setup_booking_form(container_layout)
+        
+        # Add stretch to push all content to the top within the scroll area
+        container_layout.addStretch()
         
         # Set the main container as the scroll area's widget
         main_scroll.setWidget(main_container)
         
-        # Set main scroll as the main layout
-        main_layout = QVBoxLayout(self)
+        # Add scroll area to main layout
         main_layout.addWidget(main_scroll)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create bottom container for submit button (outside scroll area)
+        bottom_container = QWidget()
+        bottom_container.setFixedHeight(80)  # Fixed height for bottom area
+        bottom_layout = QVBoxLayout(bottom_container)
+        bottom_layout.setContentsMargins(30, 10, 30, 10)
+        
+        # ---------- Submit button ----------
+        submit_btn = QPushButton("Submit Booking")
+        submit_btn.setObjectName("submitButton")
+        submit_btn.clicked.connect(self.submit_booking)
+        bottom_layout.addWidget(submit_btn, 0, Qt.AlignCenter)
+        
+        # Add bottom container to main layout
+        main_layout.addWidget(bottom_container)
         
         # Store the selected room info
         self.selected_room_id = None
@@ -151,9 +173,21 @@ class NewBookingPage(QWidget):
         layout.addLayout(time_layout)
 
         # ---------- Student information section ----------
+        student_section_layout = QHBoxLayout()
+        
         student_section_label = QLabel("Student Information:")
         student_section_label.setObjectName("formLabel")
-        layout.addWidget(student_section_label)
+        
+        # Expand button to show all student info on a separate page
+        expand_btn = QPushButton("View All Students")
+        expand_btn.setObjectName("expandButton")
+        expand_btn.clicked.connect(self.show_student_info_page)
+        
+        student_section_layout.addWidget(student_section_label)
+        student_section_layout.addStretch()  # Push button to the right
+        student_section_layout.addWidget(expand_btn)
+        
+        layout.addLayout(student_section_layout)
 
         # Scroll area for student inputs
         self.student_scroll = QScrollArea()
@@ -178,13 +212,6 @@ class NewBookingPage(QWidget):
         self.terms_checkbox = QCheckBox("I have read and agree to the booking guidelines")
         self.terms_checkbox.setObjectName("termsCheckbox")
         layout.addWidget(self.terms_checkbox)
-
-        # ---------- Submit button ----------
-        submit_btn = QPushButton("Submit Booking")
-        submit_btn.setObjectName("submitButton")
-        submit_btn.clicked.connect(self.submit_booking)
-        layout.addWidget(submit_btn, 0, Qt.AlignCenter)
-
 
     def on_time_changed(self):
         """Handle time changes and enforce specific time intervals"""
@@ -391,6 +418,34 @@ class NewBookingPage(QWidget):
                             "Please agree to the booking guidelines before submitting.")
             return False
         
+        # Get current date and time
+        current_date = QDate.currentDate()
+        current_time = QTime.currentTime()
+        selected_date = self.date_edit.date()
+        
+        # Check if booking date is in the past
+        if selected_date < current_date:
+            QMessageBox.warning(self, "Invalid Date", 
+                            "Cannot book for past dates.")
+            return False
+        
+        # Check if booking time is in the past for today
+        if selected_date == current_date:
+            start = self.start_time.time()
+            end = self.end_time.time()
+            
+            # Check if start time is in the past
+            if start < current_time:
+                QMessageBox.warning(self, "Invalid Time", 
+                                "Cannot book for past times.")
+                return False
+            
+            # Check if end time is in the past
+            if end < current_time:
+                QMessageBox.warning(self, "Invalid Time", 
+                                "Cannot book for past times.")
+                return False
+        
         # Check time constraints (8 AM to 6 PM)
         start = self.start_time.time()
         end = self.end_time.time()
@@ -420,7 +475,6 @@ class NewBookingPage(QWidget):
             return False
         
         # Check date constraint (within 1 week)
-        selected_date = self.date_edit.date()
         max_date = QDate.currentDate().addDays(7)
         if selected_date > max_date:
             QMessageBox.warning(self, "Invalid Date", 
@@ -484,6 +538,11 @@ class NewBookingPage(QWidget):
                 student_ids.append(student_id)
         
         return student_ids
+    
+    def show_student_info_page(self):
+        """Switch to student info page via parent stacked layout"""
+        self.main_window.show_student_info_page(self.student_inputs)
+
 
     def submit_booking(self):
         """Handle booking submission using db_manager"""

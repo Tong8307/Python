@@ -9,12 +9,14 @@ from .new_booking import NewBookingPage
 from .my_bookings import MyBookingsPage
 from .timetable import TimetablePage
 from .guidelines import GuidelinesPage
+from .studentInfo import StudentInfoPage
 
 class RoomBookingWidget(QWidget):
     def __init__(self, main_window, location_id, user_id):
         super().__init__()
         self.main_window = main_window
         self.location_id = location_id
+
         self.location_name = self.get_location_name(location_id)
         self.current_user_id = user_id
         
@@ -127,3 +129,15 @@ class RoomBookingWidget(QWidget):
             return get_location_name(location_id)
         except Exception:
             return f"Location {location_id}"
+        
+    def show_student_info_page(self, student_inputs):
+        """Show student info page when requested from booking page"""
+        # Create student info page if it doesn't exist
+        self.student_info_page = StudentInfoPage(self, student_inputs)
+        
+        # Add to stacked widget if not already added
+        if self.pages.indexOf(self.student_info_page) == -1:
+            self.pages.addWidget(self.student_info_page)
+        
+        # Show the student info page
+        self.pages.setCurrentWidget(self.student_info_page)
