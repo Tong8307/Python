@@ -204,7 +204,7 @@ class GPACalculatorPage(QWidget):
 
         # Add scroll area to left layout (only the input fields will scroll)
         left_layout.addWidget(scroll_area)
-        content_layout.addWidget(left_widget, 85)  # 75% width for left side
+        content_layout.addWidget(left_widget, 75)  # 75% width for left side
         
         # Right side - fixed result card (outside the scroll area)
         result_card = QFrame()
@@ -265,7 +265,7 @@ class GPACalculatorPage(QWidget):
         # Add content layout to main layout
         layout.addLayout(content_layout, 1)  # 1 = stretch factor to expand
         
-        # Add course and reset buttons container (OUTSIDE the scroll area)
+        # Add course and reset buttons container
         button_container = QHBoxLayout()
         button_container.setSpacing(8)
         

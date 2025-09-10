@@ -46,7 +46,7 @@ class GPACalculatorWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         # Header
-        title = QLabel("GPA Calculator")
+        title = QLabel("Academic Tools")
         title.setContentsMargins(0, 0, 0, 0)
         title.setObjectName("gpaHeader")
         layout.addWidget(title)
