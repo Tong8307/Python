@@ -191,7 +191,7 @@ class MainWindow(QMainWindow):
         self.user_id = None
         self.user_name = None
         
-        self.setWindowTitle("Student Assistant")
+        self.setWindowTitle("TARUMT Student Assistant App")
         self.setFixedSize(800, 900)
 
         central_widget = QWidget()
@@ -213,7 +213,7 @@ class MainWindow(QMainWindow):
         self.menu_btn.clicked.connect(self.toggle_menu)
         self.menu_btn.setVisible(False)  # Hide menu button initially
 
-        title = QLabel("Student Assistant")
+        title = QLabel("TARUMT Student Assistant App")
         title.setAlignment(Qt.AlignCenter)
 
         header_layout.addWidget(self.menu_btn)

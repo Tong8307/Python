@@ -14,10 +14,10 @@ class StudentInfoPage(QWidget):
         self.original_student_inputs = student_inputs
         self.student_widgets = []
 
-        self.setup_ui()
+        self.studentInfo()
         self.apply_styles()
 
-    def setup_ui(self):
+    def studentInfo(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)

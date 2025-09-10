@@ -44,7 +44,6 @@ class GuidelinesPage(QWidget):
                 "content": [
                     "• Bookings can be made up to 1 week in advance",
                     "• Same-day bookings are allowed subject to availability",
-                    "• Bookings must be made at least 1 hour in advance"
                 ]
             },
             {

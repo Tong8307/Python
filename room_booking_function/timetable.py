@@ -118,10 +118,20 @@ class TimetablePage(QWidget):
         rooms = get_rooms_by_location(self.location_id)
         filtered_rooms = [(r, n, c) for (r, n, c) in rooms if c >= self.user_capacity]
 
+        # Clear previous content
+        self.table.setRowCount(0)
+        self.left_header.setRowCount(0)
+        self.top_header.setColumnCount(0)
+
         if not filtered_rooms:
-            self.table.setRowCount(0)
-            self.left_header.setRowCount(0)
-            self.top_header.setColumnCount(0)
+            # Show "No rooms available" message
+            self.table.setRowCount(1)
+            self.table.setColumnCount(5)  # Use multiple columns for the message
+            self.table.setSpan(0, 0, 1, 5)  # Make the message span all columns
+            item = QTableWidgetItem("No rooms available with the selected capacity")
+            item.setTextAlignment(Qt.AlignCenter)
+            item.setFlags(Qt.ItemIsEnabled)
+            self.table.setItem(0, 0, item)
             return
 
         # Time slots
@@ -149,7 +159,7 @@ class TimetablePage(QWidget):
 
         # Fill left header
         for row, (room_id, room_name, capacity) in enumerate(filtered_rooms):
-            item = QTableWidgetItem(f"{room_name} ({capacity})")
+            item = QTableWidgetItem(f"{room_name}")
             item.setTextAlignment(Qt.AlignCenter)
             item.setFlags(Qt.ItemIsEnabled)
             self.left_header.setItem(row, 0, item)
@@ -167,10 +177,10 @@ class TimetablePage(QWidget):
                 item = QTableWidgetItem("")  # no text
                 item.setFlags(Qt.ItemIsEnabled)
                 if booked:
-                    item.setBackground(QColor("#dc3545"))
+                    item.setBackground(QColor("#dc3545"))  # Red for booked
                     item.setData(Qt.UserRole, "booked")
                 else:
-                    item.setBackground(QColor("#28a745"))
+                    item.setBackground(QColor("#28a745"))  # Green for available
                     item.setData(Qt.UserRole, "available")
                 # Tooltip on hover
                 item.setToolTip(

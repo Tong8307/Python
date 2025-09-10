@@ -73,6 +73,7 @@ class NewBookingPage(QWidget):
         submit_btn = QPushButton("Submit Booking")
         submit_btn.setObjectName("submitButton")
         submit_btn.clicked.connect(self.submit_booking)
+        submit_btn.setCursor(Qt.PointingHandCursor) 
         bottom_layout.addWidget(submit_btn, 0, Qt.AlignCenter)
         
         # Add bottom container to main layout
@@ -181,6 +182,7 @@ class NewBookingPage(QWidget):
         # Expand button to show all student info on a separate page
         expand_btn = QPushButton("View All Students")
         expand_btn.setObjectName("expandButton")
+        expand_btn.setCursor(Qt.PointingHandCursor)
         expand_btn.clicked.connect(self.show_student_info_page)
         
         student_section_layout.addWidget(student_section_label)
@@ -211,6 +213,7 @@ class NewBookingPage(QWidget):
         # ---------- Terms checkbox ----------
         self.terms_checkbox = QCheckBox("I have read and agree to the booking guidelines")
         self.terms_checkbox.setObjectName("termsCheckbox")
+        self.terms_checkbox.setCursor(Qt.PointingHandCursor)
         layout.addWidget(self.terms_checkbox)
 
     def on_time_changed(self):

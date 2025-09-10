@@ -226,13 +226,13 @@ def get_booking_styles():
     QWidget#bookingWidget QCheckBox#termsCheckbox::indicator {
         width: 22px;
         height: 22px;
-        border: 2px solid #6A5ACD;
+        border: 2px solid #283593;
         border-radius: 5px;
         background: #ffffff;
     }
     QWidget#bookingWidget QCheckBox#termsCheckbox::indicator:checked {
-        background-color: #6A5ACD;
-        border: 2px solid #6A5ACD;
+        background-color: #283593;
+        border: 2px solid #283593;
         image: url(Photo/check_icon.png); /* optional custom tick */
     }
     QWidget#bookingWidget QCheckBox#termsCheckbox::indicator:hover {
@@ -241,9 +241,9 @@ def get_booking_styles():
 
     /* Expand button for student info */
     QWidget#bookingWidget QPushButton#expandButton {
-        background-color: #5c6bc0;
-        color: white;
-        border: none;
+        background-color: #E8EAF6;
+        border: 1px solid #283593;
+        color: #283593;
         padding: 10px 20px;
         border-radius: 8px;
         font-weight: 600;
@@ -253,11 +253,11 @@ def get_booking_styles():
     }
     
     QWidget#bookingWidget QPushButton#expandButton:hover {
-        background-color: #3f51b5;
+        background-color: #d6d9ef;
     }
     
     QWidget#bookingWidget QPushButton#expandButton:pressed {
-        background-color: #3949ab;
+        background-color: #d6d9ef;
     }
     
     /* ===========================
