@@ -101,20 +101,6 @@ def gpa_styles():
             color: white;
         }
 
-        QPushButton {
-            background-color: #3949AB;
-            color: white;
-            border-radius: 4px;
-            padding: 8px;
-            font-weight: 500;
-            font-size: 14px;
-            border: none;
-        }
-
-        QPushButton:hover {
-            background-color: #5C6BC0;
-        }
-
         QLabel {
             font-size: 18px;
             font-weight: bold;
