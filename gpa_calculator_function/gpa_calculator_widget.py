@@ -16,10 +16,14 @@ class GPACalculatorWidget(QWidget):
         super().__init__()
         self.main_window = main_window
         self.current_user_id = user_id
+
+        # Initialize back button state attributes
+        self.original_back_text = ""
+        self.original_current_widget = None
         
         # Apply styles
         self.setStyleSheet(gpa_styles())
-        
+
         # Main layout and stacked widget
         self.main_layout = QVBoxLayout(self)
         self.pages = QStackedWidget()
@@ -54,9 +58,9 @@ class GPACalculatorWidget(QWidget):
 
         features = [
             ("Photo/gpa_icon.png", "GPA Calculator", self.show_gpa_calculator),
-            ("Photo/room.png", "Goal Calculator", self.show_goal_calculator),
-            ("Photo/history.png", "View History", self.show_history),
-            ("Photo/user-guide.png", "Grading Scheme", self.show_grading_scheme),
+            ("Photo/goal-calculator.png", "Goal Calculator", self.show_goal_calculator),
+            ("Photo/historycalculation.png", "View History", self.show_history),
+            ("Photo/gradingscheme.png", "Grading Scheme", self.show_grading_scheme),
         ]
 
         for i, (icon, text, handler) in enumerate(features):
@@ -87,7 +91,7 @@ class GPACalculatorWidget(QWidget):
         """Back button shown on all pages"""
         self.back_btn = QPushButton()
         self.back_btn.setIcon(QIcon("Photo/back.png"))
-        self.back_btn.setText(" Back")
+        self.back_btn.setText(" Back to Home")
         self.back_btn.setFixedSize(750, 40)
         self.back_btn.setCursor(Qt.PointingHandCursor)
         self.back_btn.setObjectName("iconBackButton")
@@ -95,10 +99,35 @@ class GPACalculatorWidget(QWidget):
         self.back_btn.clicked.connect(self.handle_back)
         self.main_layout.addWidget(self.back_btn, 0, Qt.AlignCenter)
 
+    def store_back_button_state(self):
+        """Store the current back button state"""
+        self.original_back_text = self.back_btn.text()
+        self.original_current_widget = self.pages.currentWidget()
+
+    def restore_back_button_state(self):
+        """Restore the back button to its original state"""
+        try:
+            # Always reconnect to handle_back
+            self.back_btn.clicked.disconnect()
+            self.back_btn.clicked.connect(self.handle_back)
+            
+            # Restore the original text based on which page we were on
+            if self.original_current_widget == self.feature_grid_page:
+                self.back_btn.setText(" Back to Home")
+            else:
+                self.back_btn.setText(" Back")
+                
+        except Exception as e:
+            print(f"Error restoring back button: {e}")
+            # Fallback
+            self.back_btn.clicked.connect(self.handle_back)
+            self.back_btn.setText(" Back")
+
     def handle_back(self):
         """Handle back button navigation"""
         if self.pages.currentWidget() != self.feature_grid_page:
             self.pages.setCurrentWidget(self.feature_grid_page)
+            self.back_btn.setText(" Back to Home")
         else:
             # Go back to main application home
             self.main_window.pages.setCurrentWidget(self.main_window.feature_grid_page)
@@ -106,17 +135,24 @@ class GPACalculatorWidget(QWidget):
     # Navigation methods
     def show_gpa_calculator(self):
         self.pages.setCurrentWidget(self.gpa_calculator_page)
+        self.back_btn.setText(" Back")
 
     def show_goal_calculator(self):
         self.pages.setCurrentWidget(self.goal_calculator_page)
+        self.back_btn.setText(" Back")
 
     def show_history(self):
-        # Get latest history data from database
+        """Show history from feature grid - should return to feature grid"""
         fresh_history_data = get_gpa_history(self.current_user_id)
         
-        # Update the history page with new data
-        self.history_page.refresh_data(fresh_history_data)
+        # Store the current back button state before navigating
+        self.store_back_button_state()
+        
+        # Update history page with flag indicating we came from feature grid
+        self.history_page.refresh_data(fresh_history_data, from_calculator=False)
         self.pages.setCurrentWidget(self.history_page)
+        self.back_btn.setText(" Back")
 
     def show_grading_scheme(self):
         self.pages.setCurrentWidget(self.grading_scheme_page)
+        self.back_btn.setText(" Back")

@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                              QPushButton, QGroupBox, QGridLayout, QMessageBox)
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 from styles.gpa_styles import gpa_styles
 
 class GoalCalculatorPage(QWidget):
@@ -17,11 +18,26 @@ class GoalCalculatorPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
+        title_bar = QHBoxLayout()
+
         # Title
         title = QLabel("CGPA Goal Calculator")
         title.setObjectName("gpaHeader")
-        layout.addWidget(title)
+        title_bar.addWidget(title)
+        
+        title_bar.addStretch()
+
+        # Reset button
+        reset_btn = QPushButton("Reset")
+        reset_btn.setIcon(QIcon("Photo/reset.png"))
+        reset_btn.setObjectName("resetButton")
+        reset_btn.setFixedSize(110, 45)
+        reset_btn.clicked.connect(self.reset_all)
+        title_bar.addWidget(reset_btn)
+
+        # Add title bar to main layout
+        layout.addLayout(title_bar)
         
         # Description
         desc = QLabel("Calculate the GPA you need next semester to reach your target CGPA")
@@ -135,4 +151,26 @@ class GoalCalculatorPage(QWidget):
             
         except ValueError as e:
             QMessageBox.warning(self, "Input Error", f"Please check your inputs:\n{str(e)}")
-    
+
+    def reset_all(self):
+        """Reset all inputs"""
+        reply = QMessageBox.question(self, 'Reset Confirmation', 
+                                'Are you sure you want to reset all inputs?',
+                                QMessageBox.Yes | QMessageBox.No, 
+                                QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            # Clear all input fields
+            self.current_cgpa_input.clear()
+            self.completed_credits_input.clear()
+            self.target_cgpa_input.clear()
+            self.future_credits_input.clear()
+            
+            # Hide results section
+            self.results_group.setVisible(False)
+            
+            # Optional: Clear result labels
+            self.required_gpa_label.clear()
+            self.explanation_label.clear()
+            self.scenario_label.clear()
+        

@@ -99,6 +99,7 @@ def load_stylesheet():
         font-size: 28px;
         font-weight: 500;
     }
+    
     """
 
 def get_menu_button_style():

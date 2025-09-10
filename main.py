@@ -274,7 +274,7 @@ class MainWindow(QMainWindow):
     def create_feature_grid(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(30, 30, 30 , 30)
 
         grid_layout = QGridLayout()
         grid_layout.setHorizontalSpacing(30)
@@ -283,7 +283,7 @@ class MainWindow(QMainWindow):
         features = [
             ("Photo/note_icon.png", "Note Organizer"),
             ("Photo/discussion.png", "Room Booking"),
-            ("Photo/gpa_icon.png", "GPA Calculator"),
+            ("Photo/academic.png", "Academic Tools"),
             ("Photo/QA_icon.png", "Q & A sessions"),
         ]
 
@@ -302,7 +302,7 @@ class MainWindow(QMainWindow):
     def handle_feature_click(self, feature_name):
         if feature_name == "Room Booking":
             self.pages.setCurrentWidget(self.location_selection_page)
-        elif feature_name == "GPA Calculator":
+        elif feature_name == "Academic Tools":
             self.pages.setCurrentWidget(self.gpa_calculator_widget)
         elif feature_name == "Note Organizer":
             print("Future: Go to Note Organizer")

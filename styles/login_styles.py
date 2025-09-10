@@ -107,4 +107,6 @@ def get_login_styles():
         color: #1A237E;
         cursor: pointer;
     }
+
+    
     """

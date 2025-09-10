@@ -87,10 +87,12 @@ def gpa_styles():
             border: 1px solid #ccc;
             background-color: white;
             selection-background-color: #3949AB;
+            selection-color: white;
             color: black;
         }
 
         QComboBox QAbstractItemView::item {
+            background-color: white;
             padding: 4px;
         }
 
@@ -135,7 +137,6 @@ def gpa_styles():
             background-color: #FFF0F5;
             font-size: 18px;
             border-radius: 8px;
-            margin-left: 15px;
         }
 
         QPushButton#addCourseButton:hover {
@@ -202,6 +203,21 @@ def gpa_styles():
             background-color: #F3E5F5;
         }
 
+        /* Details Button */
+        QPushButton#detailsButton {
+            border: 1px solid #3949AB;
+            color: #3949AB;
+            padding: 6px;
+            font-weight: 500;
+            background-color: #E6E6FA;
+            font-size: 18px;
+            border-radius: 8px;
+        }
+
+        QPushButton#detailsButton:hover {
+            background-color: #DCDCF0;
+        }
+
         /* Back Button */
         QPushButton#iconBackButton {
             background-color: #283593;
@@ -228,20 +244,21 @@ def gpa_styles():
         /* Result Card */
         QFrame#resultCard {
             background-color: white;
-            border: 1px solid #F3E5F5;
+            border: 1px solid #BBDEFB;
             border-radius: 6px;
-            padding: 5px; /* REDUCED from default */
+            padding: 5px; 
         }
         
-        /* Result Card Header - Tighter */
+        /* Result Card Header */
         QLabel#resultTitle {
-            font-size: 24px;
+            font-size: 26px;
             font-weight: bold;
-            color: #673AB7;
-            background-color: #F3E5F5;
-            padding: 8px 12px; /* REDUCED vertical padding */
+            color: #1565C0;         
+            background-color: #E3F2FD;  
+            padding: 8px 12px;
             border-radius: 4px;
-            margin: 5px; /* ADD margin to separate from edges */
+            margin: 5px;
+            border: 1px solid #BBDEFB; 
         }
 
         QLabel#resultItemLabel {
@@ -332,6 +349,29 @@ def gpa_styles():
         
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
             height: 0px;
+        }
+
+        /* ===== Feature Buttons ===== */
+        #FeatureButton {
+            background-color: white;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+        }
+
+        #FeatureButton:hover {
+            background-color: #E8EAF6;
+            border: 1px solid #283593;
+        }
+        
+        #iconLabel {
+            min-width: 150px;
+            min-height: 150px;
+        }
+
+        #textLabel {
+            font-size: 28px;
+            font-weight: 500;
         }
         
     """
