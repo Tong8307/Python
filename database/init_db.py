@@ -80,6 +80,35 @@ CREATE TABLE IF NOT EXISTS booking_students (
 )
 """)
 
+# 7. GPA History Table (main record)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS gpa_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    semester_credits INTEGER,
+    gpa REAL,
+    total_credits INTEGER,
+    cgpa REAL,
+    current_cgpa REAL,
+    completed_credits INTEGER,
+    FOREIGN KEY (student_id) REFERENCES users(student_id)
+)
+""")
+
+# 8. GPA Courses Table (individual courses)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS gpa_courses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gpa_history_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    credits INTEGER NOT NULL,
+    grade TEXT NOT NULL,
+    FOREIGN KEY (gpa_history_id) REFERENCES gpa_history(id) ON DELETE CASCADE
+)
+""")
+
+
 # Insert Locations
 cursor.executemany("INSERT OR IGNORE INTO locations (id, name) VALUES (?, ?)", [
     (1, 'Cyber Centre Discussion Room'),

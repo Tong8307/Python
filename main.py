@@ -18,6 +18,7 @@ from room_booking_function.room_booking_widget import RoomBookingWidget
 from room_booking_function.feature_button import FeatureButton
 from room_booking_function.guidelines import GuidelinesPage
 from room_booking_function.all_booking import AllBookingsPage
+from gpa_calculator_function.gpa_calculator_widget import GPACalculatorWidget
 
 class SlidingMenu(QWidget):
     def __init__(self, parent=None):
@@ -232,6 +233,7 @@ class MainWindow(QMainWindow):
         # Initialize main app pages (will be created after login)
         self.feature_grid_page = None
         self.location_selection_page = None
+        self.gpa_calculator_widget = None
         
         # Initialize sliding menu (but keep it hidden until login)
         self.sliding_menu = SlidingMenu(self)
@@ -303,6 +305,10 @@ class MainWindow(QMainWindow):
         if self.location_selection_page is None:
             self.location_selection_page = LocationSelectionWidget(self)
             self.pages.addWidget(self.location_selection_page)
+        
+        if self.gpa_calculator_widget is None:
+            self.gpa_calculator_widget = GPACalculatorWidget(self, self.user_id)
+            self.pages.addWidget(self.gpa_calculator_widget)
 
     def create_feature_grid(self):
         page = QWidget()
@@ -316,7 +322,7 @@ class MainWindow(QMainWindow):
         features = [
             ("Photo/note_icon.png", "Note Organizer"),
             ("Photo/discussion.png", "Room Booking"),
-            ("Photo/gpa_icon.png", "GPA Calculator"),
+            ("Photo/gpa_icon.png", "Academic Tools"),
             ("Photo/QA_icon.png", "Q & A sessions"),
         ]
 
@@ -335,6 +341,8 @@ class MainWindow(QMainWindow):
     def handle_feature_click(self, feature_name):
         if feature_name == "Room Booking":
             self.pages.setCurrentWidget(self.location_selection_page)
+        elif feature_name == "Academic Tools":
+            self.pages.setCurrentWidget(self.gpa_calculator_widget)
         elif feature_name == "Note Organizer":
             print("Future: Go to Note Organizer")
         else:
@@ -410,6 +418,16 @@ class MainWindow(QMainWindow):
         self.room_booking_widget_by_location = RoomBookingWidget(self, location_id, self.user_id)
         self.pages.addWidget(self.room_booking_widget_by_location)
         self.pages.setCurrentWidget(self.room_booking_widget_by_location)
+    
+    def open_gpa_calculator_page(self, user_id):
+        # Clean up previous GPA widget if exists
+        if hasattr(self, 'gpa_calculator_widget'):
+            self.pages.removeWidget(self.gpa_calculator_widget)
+            self.gpa_calculator_widget.deleteLater()
+
+        self.gpa_calculator_widget = GPACalculatorWidget(self)
+        self.pages.addWidget(self.gpa_calculator_widget)
+        self.pages.setCurrentWidget(self.gpa_calculator_widget)
 
     def logout(self):
         # Reset user info
@@ -436,6 +454,11 @@ class MainWindow(QMainWindow):
             self.pages.removeWidget(self.location_selection_page)
             self.location_selection_page.deleteLater()
             self.location_selection_page = None
+        
+        if self.gpa_calculator_widget:
+            self.pages.removeWidget(self.gpa_calculator_widget)
+            self.gpa_calculator_widget.deleteLater()
+            self.gpa_calculator_widget = None
         
         # Hide menu
         self.hide_menu()

@@ -421,3 +421,98 @@ def get_rooms_by_location(location_id):
     result = cursor.fetchall()
     conn.close()
     return result
+
+# -----------------
+# GPA HISTORY
+# -----------------
+# Add these functions to your db_manager.py
+
+def save_gpa_calculation(student_id, semester_credits, gpa, total_credits, cgpa, 
+                       courses_data, current_cgpa, completed_credits):
+    """Save a GPA calculation to the database using normalized tables"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Get current local time in Python (without seconds)
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")  # ← No seconds
+        
+        # Insert main GPA record with Python's local time
+        cursor.execute('''
+            INSERT INTO gpa_history 
+            (student_id, timestamp, semester_credits, gpa, total_credits, cgpa, 
+             current_cgpa, completed_credits)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (student_id, current_time, semester_credits, gpa, total_credits, cgpa, 
+              current_cgpa, completed_credits))
+        
+        gpa_history_id = cursor.lastrowid
+        
+        # Insert individual courses
+        for course in courses_data:
+            cursor.execute('''
+                INSERT INTO gpa_courses (gpa_history_id, name, credits, grade)
+                VALUES (?, ?, ?, ?)
+            ''', (gpa_history_id, course['name'], course['credits'], course['grade']))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in save_gpa_calculation: {e}")
+        return False
+
+def get_gpa_history(student_id, limit=10):
+    """Retrieve GPA history for a student with courses"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Get main GPA records
+        cursor.execute('''
+            SELECT id, timestamp, semester_credits, gpa, total_credits, cgpa, 
+                   current_cgpa, completed_credits
+            FROM gpa_history 
+            WHERE student_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        ''', (student_id, limit))
+        
+        history = []
+        for row in cursor.fetchall():
+            gpa_history_id = row[0]
+            
+            # Get courses for this GPA calculation
+            cursor.execute('''
+                SELECT name, credits, grade 
+                FROM gpa_courses 
+                WHERE gpa_history_id = ?
+                ORDER BY name
+            ''', (gpa_history_id,))
+            
+            courses_data = []
+            for course_row in cursor.fetchall():
+                courses_data.append({
+                    'name': course_row[0],
+                    'credits': course_row[1],
+                    'grade': course_row[2]
+                })
+            
+            history.append({
+                'id': gpa_history_id,
+                'timestamp': row[1],
+                'semester_credits': row[2],
+                'gpa': row[3],
+                'total_credits': row[4],
+                'cgpa': row[5],
+                'current_cgpa': row[6],
+                'completed_credits': row[7],
+                'courses_data': courses_data
+            })
+        
+        conn.close()
+        return history
+    except sqlite3.Error as e:
+        print(f"Database error in get_gpa_history: {e}")
+        return []
