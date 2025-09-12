@@ -1,7 +1,3 @@
-# notes_organizer_function/notes_organizer.py
-# Notes editor (text + inking) backed by SQLite for note title/content only.
-# Image/ink overlay is runtime-only for now; exports work as before.
-
 import os
 from datetime import datetime
 
@@ -13,12 +9,12 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import (
     QPixmap, QPainter, QImage, QPen, QColor, QFont, QPainterPath, QCursor,
-    QTransform, QIcon, QPdfWriter
+    QTransform, QIcon, QPdfWriter, QTextListFormat, QTextCharFormat
 )
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit, QMessageBox,
     QTabWidget, QFileDialog, QToolButton, QMenu, QPushButton, QWidgetAction,
-    QFrame, QSlider, QComboBox, QSpinBox, QColorDialog
+    QFrame, QSlider, QComboBox, QColorDialog
 )
 
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -68,11 +64,12 @@ class InkTextEdit(QTextEdit):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAcceptRichText(False)
+        # rich text so formatting tools work
+        self.setAcceptRichText(True)
         self.setMinimumHeight(360)
         self.setObjectName("notesEditor")
 
-        # Neutral cursor (I-beam) until a tool is chosen
+        # tools
         self.tool = None                   # "pencil"|"pen"|"marker"|"eraser"|None
         self.eraser_mode = "normal"        # "normal"|"lasso"
         self.colors = {"pencil": QColor("#555555"),
@@ -81,7 +78,7 @@ class InkTextEdit(QTextEdit):
         self.widths = {"pencil": 2, "pen": 4, "marker": 14, "eraser": 22}
         self.alphas = {"pencil": 255, "pen": 255, "marker": 110}
 
-        # Overlay state
+        # overlay state
         self.strokes = []
         self._current_pts = []
         self.undo_stack = []
@@ -92,9 +89,9 @@ class InkTextEdit(QTextEdit):
         self.selected_idx = None
         self._drag_offset = QPoint(0, 0)
 
-        # overlay rects
-        self._btn_delete_rect = None
-        self._resize_handle_rect = None
+        # overlay UI rects
+        self._btn_delete_rect = None           # top-left of selected image
+        self._resize_handle_rect = None        # bottom-right of selected image
         self._resizing_image = False
         self._resize_start_pos = None
         self._resize_start_size = None
@@ -103,6 +100,8 @@ class InkTextEdit(QTextEdit):
         self._cropping = False
         self._crop_start = None
         self._crop_rect = None
+        self._crop_drag_mode = None  # "move" | "nw"|"ne"|"sw"|"se"|"n"|"s"|"w"|"e"
+        self._crop_drag_offset = QPoint(0, 0)
         self.crop_ratio = None
         self.crop_shape = "rect"
 
@@ -141,7 +140,6 @@ class InkTextEdit(QTextEdit):
         if self.tool in ("pencil", "pen", "marker", "eraser"):
             pm = self._cursor_pixmaps.get(self.tool)
             if pm and not pm.isNull():
-                # Cursor ~0.5 logical px smaller than toolbar icon (DPI-aware)
                 dpr = getattr(self.window(), "devicePixelRatioF", lambda: 1.0)()
                 cursor_logical = max(8.0, float(self._cursor_base) - 0.5)
                 size_px = int(round(cursor_logical * dpr))
@@ -194,11 +192,6 @@ class InkTextEdit(QTextEdit):
     def set_crop_ratio_string(self, s: str):
         mapping = {"Free": None, "1:1": 1.0, "4:5": 4/5, "5:4": 5/4, "16:9": 16/9, "3:2": 3/2}
         self.crop_ratio = mapping.get(s, None)
-    def set_crop_size(self, w: int, h: int):
-        if not self._cropping or self._crop_rect is None: return
-        tl = self._crop_rect.topLeft()
-        self._crop_rect = QRect(tl, QSize(max(1, w), max(1, h)))
-        self.viewport().update()
 
     # ---------- image ops ----------
     def insert_image(self, path: str):
@@ -210,6 +203,8 @@ class InkTextEdit(QTextEdit):
         self.undo_stack.append(("add_image", len(self.images) - 1))
         self.redo_stack.clear()
         self.imageCountChanged.emit(len(self.images))
+        self.selectionChangedForImage.emit(True)
+        self.selected_idx = len(self.images) - 1
         self.viewport().update()
 
     def get_selected_props(self):
@@ -243,8 +238,14 @@ class InkTextEdit(QTextEdit):
         if self.selected_idx is None: return
         self._cropping = True
         self._crop_start = None
-        self._crop_rect = None
-        # show floating buttons near bottom center
+        # default crop rect centered over selected image
+        im = self.images[self.selected_idx]
+        pos_v = self._to_view(im["pos"]); sz = im["pm"].size()
+        rect = QRect(pos_v.x() + sz.width()//6, pos_v.y() + sz.height()//6,
+                     sz.width()//3*2//2*2, sz.height()//3*2//2*2)
+        self._crop_rect = rect
+
+        # floating buttons near bottom center
         y = self.viewport().height() - 40
         self._crop_cancel_btn.move(self.viewport().width()//2 - 46, y)
         self._crop_ok_btn.move(self.viewport().width()//2 + 10, y)
@@ -255,6 +256,7 @@ class InkTextEdit(QTextEdit):
         self._cropping = False
         self._crop_start = None
         self._crop_rect = None
+        self._crop_drag_mode = None
         self._crop_cancel_btn.hide(); self._crop_ok_btn.hide()
         self.viewport().update()
 
@@ -262,10 +264,13 @@ class InkTextEdit(QTextEdit):
         if not self._cropping or self.selected_idx is None or not self._crop_rect:
             self._cancel_crop(); return
         im = self.images[self.selected_idx]
-        pm, pos = im["pm"], im["pos"]
-        rect_doc = self._crop_rect.intersected(QRect(pos, pm.size()))
+        pm, pos_doc = im["pm"], im["pos"]
+        rect_view = self._crop_rect
+        rect_doc = QRect(rect_view.x(), rect_view.y()+self._vy(), rect_view.width(), rect_view.height())
+        im_rect_doc = QRect(pos_doc, pm.size())
+        rect_doc = rect_doc.intersected(im_rect_doc)
         if rect_doc.isEmpty(): self._cancel_crop(); return
-        local = QRect(rect_doc.x()-pos.x(), rect_doc.y()-pos.y(), rect_doc.width(), rect_doc.height())
+        local = QRect(rect_doc.x()-pos_doc.x(), rect_doc.y()-pos_doc.y(), rect_doc.width(), rect_doc.height())
         cropped = pm.copy(local)
 
         if self.crop_shape == "circle":
@@ -280,43 +285,6 @@ class InkTextEdit(QTextEdit):
         im["base"] = cropped
         self._rebuild_rotation(im, im["angle"])
         self._cancel_crop()
-
-    # ---------- reset adjustments ----------
-    def reset_selected_image(self):
-        if self.selected_idx is None: return
-        im = self.images[self.selected_idx]
-        im["opacity"] = 1.0
-        self._rebuild_rotation(im, 0.0)  # keep base (size/crop)
-        self.viewport().update()
-
-    # ---------- hit testing ----------
-    def _hit_image(self, p_view: QPoint):
-        if self._btn_delete_rect and self._btn_delete_rect.contains(p_view):
-            return "btn_delete"
-        if self._resize_handle_rect and self._resize_handle_rect.contains(p_view):
-            return "handle_resize"
-        p_doc = self._to_doc(p_view)
-        for i in reversed(range(len(self.images))):
-            im = self.images[i]; pm, pos = im["pm"], im["pos"]
-            if QRect(pos, pm.size()).contains(p_doc):
-                return i
-        return None
-
-    def _confirm_delete_selected_image(self):
-        if self.selected_idx is None: return
-        reply = QMessageBox.question(self, "Delete Image", "Delete this image?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            idx = self.selected_idx
-            item = self.images.pop(idx)
-            self.undo_stack.append(("del_image", (idx, item)))
-            self.redo_stack.clear()
-            self.selected_idx = None
-            self._btn_delete_rect = None
-            self._resize_handle_rect = None
-            self.selectionChangedForImage.emit(False)
-            self.imageCountChanged.emit(len(self.images))
-            self.viewport().update()
 
     # ---------- undo/redo ----------
     def undo(self):
@@ -364,7 +332,6 @@ class InkTextEdit(QTextEdit):
         return False
 
     def _erase_stroke_by_radius(self, stroke: Stroke, eraser_pts, radius: int):
-        """Return list of stroke segments after pixel-like erase along path."""
         segments, cur = [], []
         for pt in stroke.points:
             if self._near_any(pt, eraser_pts, radius):
@@ -377,9 +344,40 @@ class InkTextEdit(QTextEdit):
             segments.append(Stroke(cur, stroke.color, stroke.width, stroke.alpha, stroke.mode))
         return segments
 
+    # ---------- crop hit-testing ----------
+    def _crop_handle_under(self, p: QPoint):
+        if not self._crop_rect: return None
+        r = self._crop_rect
+        handle = 10
+        def rect_at(x, y): return QRect(x-handle//2, y-handle//2, handle, handle)
+        corners = {
+            "nw": rect_at(r.left(),  r.top()),
+            "ne": rect_at(r.right(), r.top()),
+            "sw": rect_at(r.left(),  r.bottom()),
+            "se": rect_at(r.right(), r.bottom()),
+        }
+        for k, rr in corners.items():
+            if rr.contains(p): return k
+        if r.adjusted(8,8,-8,-8).contains(p): return "move"
+        if QRect(r.left()+r.width()//2-handle//2, r.top()-handle//2, handle, handle).contains(p): return "n"
+        if QRect(r.left()+r.width()//2-handle//2, r.bottom()-handle//2, handle, handle).contains(p): return "s"
+        if QRect(r.left()-handle//2, r.top()+r.height()//2-handle//2, handle, handle).contains(p): return "w"
+        if QRect(r.right()-handle//2, r.top()+r.height()//2-handle//2, handle, handle).contains(p): return "e"
+        return None
+
     # ---------- mouse & paint ----------
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
+            if self._cropping:
+                mode = self._crop_handle_under(e.pos())
+                if mode:
+                    self._crop_drag_mode = mode
+                    self._crop_drag_offset = e.pos() - self._crop_rect.topLeft()
+                else:
+                    self._crop_start = e.pos()
+                    self._crop_rect = QRect(self._crop_start, self._crop_start)
+                self.viewport().update(); return
+
             hit = self._hit_image(e.pos())
             if hit == "btn_delete":
                 self._confirm_delete_selected_image(); return
@@ -413,6 +411,37 @@ class InkTextEdit(QTextEdit):
             y = self.viewport().height() - 40
             self._crop_cancel_btn.move(self.viewport().width()//2 - 46, y)
             self._crop_ok_btn.move(self.viewport().width()//2 + 10, y)
+            # drag/resize
+            if self._crop_drag_mode and e.buttons() & Qt.LeftButton:
+                r = QRect(self._crop_rect)
+                p = e.pos()
+                if self._crop_drag_mode == "move":
+                    tl = p - self._crop_drag_offset
+                    self._crop_rect.moveTo(tl)
+                else:
+                    if "n" in self._crop_drag_mode: r.setTop(p.y())
+                    if "s" in self._crop_drag_mode: r.setBottom(p.y())
+                    if "w" in self._crop_drag_mode: r.setLeft(p.x())
+                    if "e" in self._crop_drag_mode: r.setRight(p.x())
+                    self._crop_rect = r.normalized()
+                # aspect lock if any
+                if self.crop_ratio:
+                    r = QRect(self._crop_rect)
+                    h = r.height()
+                    w = int(round(h * self.crop_ratio))
+                    if w <= 0: w = 1
+                    r.setWidth(w)
+                    self._crop_rect = r
+                self.viewport().update(); return
+            if self._crop_start and e.buttons() & Qt.LeftButton:
+                r = QRect(self._crop_start, e.pos()).normalized()
+                if self.crop_ratio:
+                    h = r.height()
+                    w = int(round(h * self.crop_ratio))
+                    if r.left() == self._crop_start.x(): r.setRight(r.left() + w)
+                    else: r.setLeft(r.right() - w)
+                self._crop_rect = r
+                self.viewport().update(); return
 
         if self._resizing_image and self.selected_idx is not None and (e.buttons() & Qt.LeftButton):
             im = self.images[self.selected_idx]
@@ -424,17 +453,6 @@ class InkTextEdit(QTextEdit):
             im["base"] = new_base
             t = QTransform(); t.rotate(im["angle"])
             im["pm"] = new_base.transformed(t, Qt.SmoothTransformation)
-            self.viewport().update(); return
-
-        if self._cropping and self.selected_idx is not None and e.buttons() & Qt.LeftButton:
-            cur = self._to_doc(e.pos())
-            if self._crop_start is None: self._crop_start = cur
-            r = QRect(self._crop_start, cur).normalized()
-            if self.crop_ratio:
-                h = r.height(); w = int(h * self.crop_ratio)
-                if r.left() == self._crop_start.x(): r.setRight(r.left() + w)
-                else: r.setLeft(r.right() - w)
-            self._crop_rect = r
             self.viewport().update(); return
 
         if self.selected_idx is not None and e.buttons() & Qt.LeftButton and not self._cropping:
@@ -455,7 +473,10 @@ class InkTextEdit(QTextEdit):
                 self._apply_tool_cursor()
                 self.viewport().update(); return
 
-            if self._cropping: return  # wait for ✔ / ✖
+            if self._cropping:
+                self._crop_drag_mode = None
+                return
+
             if self.selected_idx is not None:
                 self.viewport().update(); return
 
@@ -464,7 +485,6 @@ class InkTextEdit(QTextEdit):
 
             if self.tool == "eraser":
                 if self.eraser_mode == "normal":
-                    # Normal eraser: erase without preview path
                     radius = max(4, self.widths["eraser"])
                     new_strokes = []
                     changed = False
@@ -505,19 +525,42 @@ class InkTextEdit(QTextEdit):
     def paintEvent(self, ev):
         super().paintEvent(ev)
         p = QPainter(self.viewport()); yoff = self._vy()
+        p.setRenderHint(QPainter.Antialiasing)
 
         # images
-        for im in self.images:
+        self._btn_delete_rect = None
+        self._resize_handle_rect = None
+        for i, im in enumerate(self.images):
             p.save(); p.setOpacity(im["opacity"])
-            p.drawPixmap(self._to_view(im["pos"]), im["pm"]); p.restore()
+            pos_v = self._to_view(im["pos"])
+            p.drawPixmap(pos_v, im["pm"])
+            p.restore()
+
+            # overlay controls for selected image
+            if self.selected_idx == i and not self._cropping:
+                rect_v = QRect(pos_v, im["pm"].size())
+                # subtle border
+                pen = QPen(QColor(11,31,94,180)); pen.setWidth(2)
+                p.setPen(pen); p.setBrush(Qt.NoBrush); p.drawRect(rect_v.adjusted(0,0,-1,-1))
+                # delete (×) at top-left
+                del_size = 18
+                self._btn_delete_rect = QRect(rect_v.left()-1, rect_v.top()-1, del_size+6, del_size+6)
+                p.setBrush(QColor(255,255,255,240)); p.setPen(QPen(QColor("#0b1f5e")))
+                p.drawRoundedRect(self._btn_delete_rect, 5, 5)
+                f = QFont(); f.setBold(True); f.setPointSize(10); p.setFont(f)
+                p.drawText(self._btn_delete_rect, Qt.AlignCenter, "×")
+                # resize handle (bottom-right)
+                h = 14
+                self._resize_handle_rect = QRect(rect_v.right()-h+1, rect_v.bottom()-h+1, h, h)
+                p.setBrush(QColor("#0b1f5e")); p.setPen(Qt.NoPen)
+                p.drawRect(self._resize_handle_rect)
 
         # strokes
         for s in self.strokes: s.paint(p, yoff)
 
         # live stroke preview
-        if self._current_pts and self.tool in ("pencil","pen","marker","eraser"):
+        if self._current_pts and self.tool in ("pencil","pen","marker","eraser") and not self._cropping:
             if self.tool == "eraser":
-                # Only lasso shows a dashed preview; normal eraser shows none.
                 if self.eraser_mode == "lasso":
                     pen = QPen(QColor("#999")); pen.setWidth(1); pen.setStyle(Qt.DashLine); p.setPen(pen)
                     path = QPainterPath(self._to_view(self._current_pts[0]))
@@ -535,7 +578,72 @@ class InkTextEdit(QTextEdit):
                 path = QPainterPath(self._to_view(self._current_pts[0]))
                 for pt in self._current_pts[1:]: path.lineTo(self._to_view(pt))
                 p.drawPath(path)
+
+        # crop overlay
+        if self._cropping and self._crop_rect:
+            r = QRect(self._crop_rect)
+            # darken outside
+            p.save()
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(0,0,0,80))
+            full = self.viewport().rect()
+            p.drawRect(full)
+            p.setCompositionMode(QPainter.CompositionMode_Clear)
+            if self.crop_shape == "circle":
+                d = min(r.width(), r.height())
+                circle = QRect(r.center().x()-d//2, r.center().y()-d//2, d, d)
+                path = QPainterPath(); path.addEllipse(circle)
+                p.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                p.setPen(QPen(QColor("#00bcd4"), 2, Qt.SolidLine))
+                p.setBrush(Qt.NoBrush); p.drawEllipse(circle)
+                p.setPen(Qt.NoPen); p.setBrush(QColor(0,0,0,80))
+            else:
+                p.setCompositionMode(QPainter.CompositionMode_Source)
+                p.setBrush(QColor(255,255,255,0))
+                p.drawRect(r)
+                p.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                p.setPen(QPen(QColor("#00bcd4"), 2)); p.setBrush(Qt.NoBrush); p.drawRect(r)
+            p.restore()
+            # handles
+            handle = 10
+            p.setBrush(QColor("#00bcd4")); p.setPen(Qt.NoPen)
+            for pt in (r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight(),
+                       QPoint(r.center().x(), r.top()),
+                       QPoint(r.center().x(), r.bottom()),
+                       QPoint(r.left(), r.center().y()),
+                       QPoint(r.right(), r.center().y())):
+                p.drawRect(QRect(pt.x()-handle//2, pt.y()-handle//2, handle, handle))
+
         p.end()
+
+    # ---------- image hit testing ----------
+    def _hit_image(self, p_view: QPoint):
+        if self._btn_delete_rect and self._btn_delete_rect.contains(p_view):
+            return "btn_delete"
+        if self._resize_handle_rect and self._resize_handle_rect.contains(p_view):
+            return "handle_resize"
+        p_doc = self._to_doc(p_view)
+        for i in reversed(range(len(self.images))):
+            im = self.images[i]; pm, pos = im["pm"], im["pos"]
+            if QRect(pos, pm.size()).contains(p_doc):
+                return i
+        return None
+
+    def _confirm_delete_selected_image(self):
+        if self.selected_idx is None: return
+        reply = QMessageBox.question(self, "Delete Image", "Delete this image?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            idx = self.selected_idx
+            item = self.images.pop(idx)
+            self.undo_stack.append(("del_image", (idx, item)))
+            self.redo_stack.clear()
+            self.selected_idx = None
+            self._btn_delete_rect = None
+            self._resize_handle_rect = None
+            self.selectionChangedForImage.emit(False)
+            self.imageCountChanged.emit(len(self.images))
+            self.viewport().update()
 
     # ---------- helpers ----------
     def _smooth(self, pts):
@@ -572,7 +680,7 @@ class InkTextEdit(QTextEdit):
         }
 
     def dict_to_overlay(self, d: dict):
-        # Placeholder for future DB-backed overlays. For now, ignore persisted data.
+        # Placeholder for future DB-backed overlays.
         self.strokes = []
         self.images = []
         self.imageCountChanged.emit(0)
@@ -592,59 +700,53 @@ class InkTextEdit(QTextEdit):
 # ---------------- Image Tools Panel ----------------
 
 class ImageToolsPanel(QFrame):
-    """Right-side, collapsible panel with smooth animation and cute styling."""
+    """Right-side image tools: Crop, Aspect/Shape, Rotate, Opacity. Closes with ✕."""
     startCrop = pyqtSignal()
     rotateStep = pyqtSignal(int)      # ±90
     rotateTo   = pyqtSignal(int)      # 0..360
     setOpacity = pyqtSignal(int)      # 0..100
-    resetReq   = pyqtSignal()
     cropShapeChanged = pyqtSignal(str)
     cropRatioChanged = pyqtSignal(str)
-    cropSizeEdited   = pyqtSignal(int, int)
-    expandedChanged  = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("imgPanel")
         self.setFrameShape(QFrame.StyledPanel)
-        self.setMinimumWidth(220)
-        self.setMaximumWidth(260)
 
-        v = QVBoxLayout(self); v.setContentsMargins(12, 12, 12, 12); v.setSpacing(12)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 12, 12, 12)
+        v.setSpacing(12)
 
-        # header
+        # header with close 'x'
         hdr = QHBoxLayout()
         title = QLabel("Image"); title.setObjectName("imgPanelTitle")
-        self.btn_toggle = QToolButton()
-        self.btn_toggle.setIcon(QIcon(PHOTO("panel_toggle.png")))
-        self.btn_toggle.setIconSize(QSize(18,18))
-        self.btn_toggle.setToolTip("Collapse/Expand")
-        self.btn_toggle.clicked.connect(self.toggle)
-        hdr.addWidget(title); hdr.addStretch(); hdr.addWidget(self.btn_toggle)
+        self.btn_close = QToolButton(); self.btn_close.setText("✕"); self.btn_close.setToolTip("Close")
+        self.btn_close.clicked.connect(self.hide)
+        hdr.addWidget(title); hdr.addStretch(); hdr.addWidget(self.btn_close)
         v.addLayout(hdr)
 
-        # Crop
+        # Crop controls
         crop_card = QFrame(); crop_card.setObjectName("imgCard")
         cv = QVBoxLayout(crop_card); cv.setContentsMargins(10,10,10,10); cv.setSpacing(8)
+
         row0 = QHBoxLayout()
-        lbl_crop = QLabel("Crop")
-        btn_crop = QToolButton()
-        btn_crop.setIcon(QIcon(PHOTO("edit.png"))); btn_crop.setIconSize(QSize(22,22))
-        btn_crop.setText("Start"); btn_crop.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        btn_crop.setObjectName("primaryBtn")
-        btn_crop.clicked.connect(self.startCrop.emit)
-        row0.addWidget(lbl_crop); row0.addStretch(); row0.addWidget(btn_crop)
+        btn_start = QToolButton(); btn_start.setObjectName("notesTB"); btn_start.setText("Crop")
+        btn_start.setToolTip("Start cropping")
+        btn_start.clicked.connect(self.startCrop.emit)
+        row0.addWidget(btn_start); row0.addStretch()
         cv.addLayout(row0)
 
         shape_row = QHBoxLayout()
+        lbl_shape = QLabel("Shape")
         self.btn_rect = QToolButton(); self.btn_rect.setCheckable(True); self.btn_rect.setChecked(True)
-        self.btn_rect.setText("▭"); self.btn_rect.setObjectName("segmentBtn")
+        self.btn_rect.setText("▭"); self.btn_rect.setObjectName("notesTB")
         self.btn_circle = QToolButton(); self.btn_circle.setCheckable(True)
-        self.btn_circle.setText("◯"); self.btn_circle.setObjectName("segmentBtn")
-        shape_row.addWidget(self.btn_rect); shape_row.addWidget(self.btn_circle); shape_row.addStretch()
+        self.btn_circle.setText("◯"); self.btn_circle.setObjectName("notesTB")
+        shape_row.addWidget(lbl_shape); shape_row.addWidget(self.btn_rect); shape_row.addWidget(self.btn_circle); shape_row.addStretch()
         cv.addLayout(shape_row)
-        self.btn_rect.toggled.connect(lambda on: on and self._emit_shape("rect"))
-        self.btn_circle.toggled.connect(lambda on: on and self._emit_shape("circle"))
+
+        self.btn_rect.toggled.connect(lambda on: on and self.cropShapeChanged.emit("rect"))
+        self.btn_circle.toggled.connect(lambda on: on and self.cropShapeChanged.emit("circle"))
 
         ratio_row = QHBoxLayout()
         ratio_row.addWidget(QLabel("Aspect"))
@@ -653,15 +755,6 @@ class ImageToolsPanel(QFrame):
         ratio_row.addWidget(self.cb_ratio); ratio_row.addStretch()
         cv.addLayout(ratio_row)
 
-        size_row = QHBoxLayout()
-        size_row.addWidget(QLabel("W")); self.sp_w = QSpinBox(); self.sp_w.setRange(1, 10000); self.sp_w.setButtonSymbols(QSpinBox.NoButtons)
-        size_row.addWidget(self.sp_w); size_row.addWidget(QLabel("H"))
-        self.sp_h = QSpinBox(); self.sp_h.setRange(1, 10000); self.sp_h.setButtonSymbols(QSpinBox.NoButtons)
-        size_row.addWidget(self.sp_h); size_row.addStretch()
-        cv.addLayout(size_row)
-        self.sp_w.valueChanged.connect(lambda v: self.cropSizeEdited.emit(v, self.sp_h.value()))
-        self.sp_h.valueChanged.connect(lambda v: self.cropSizeEdited.emit(self.sp_w.value(), v))
-
         v.addWidget(crop_card)
 
         # Rotate
@@ -669,50 +762,32 @@ class ImageToolsPanel(QFrame):
         rv = QVBoxLayout(rot_card); rv.setContentsMargins(10,10,10,10); rv.setSpacing(8)
         rv.addWidget(QLabel("Rotate"))
         rrow = QHBoxLayout()
-        btn_l = QToolButton(); btn_l.setIcon(QIcon(PHOTO("rotate_left.png"))); btn_l.setIconSize(QSize(20,20))
-        btn_r = QToolButton(); btn_r.setIcon(QIcon(PHOTO("rotate_right.png"))); btn_r.setIconSize(QSize(20,20))
+        btn_l = QToolButton(); btn_l.setObjectName("notesTB"); btn_l.setIcon(QIcon(PHOTO("rotate_left.png"))); btn_l.setIconSize(QSize(20,20))
+        btn_r = QToolButton(); btn_r.setObjectName("notesTB"); btn_r.setIcon(QIcon(PHOTO("rotate_right.png"))); btn_r.setIconSize(QSize(20,20))
         btn_l.clicked.connect(lambda: self.rotateStep.emit(-90)); btn_r.clicked.connect(lambda: self.rotateStep.emit(90))
         rrow.addWidget(btn_l); rrow.addWidget(btn_r); rrow.addStretch(); rv.addLayout(rrow)
         self.sld_angle = QSlider(Qt.Horizontal); self.sld_angle.setRange(0, 360); self.sld_angle.setValue(0)
         self.sld_angle.valueChanged.connect(self.rotateTo.emit); rv.addWidget(self.sld_angle)
         v.addWidget(rot_card)
 
-        # Opacity + reset
+        # Opacity
         adj_card = QFrame(); adj_card.setObjectName("imgCard")
         av = QVBoxLayout(adj_card); av.setContentsMargins(10,10,10,10); av.setSpacing(8)
         av.addWidget(QLabel("Opacity"))
         self.sld_opacity = QSlider(Qt.Horizontal); self.sld_opacity.setRange(0,100); self.sld_opacity.setValue(100)
         self.sld_opacity.valueChanged.connect(self.setOpacity.emit); av.addWidget(self.sld_opacity)
-        btn_reset = QPushButton("Reset adjustments"); btn_reset.setObjectName("resetBtn"); btn_reset.clicked.connect(self.resetReq.emit)
-        av.addWidget(btn_reset); v.addWidget(adj_card)
+        v.addWidget(adj_card)
 
         v.addStretch()
 
-        # start disabled/hidden; will show when an image exists
-        self.hide(); self.setEnabled(False)
-
-    def _emit_shape(self, name: str): self.cropShapeChanged.emit(name)
+        # hidden until an image exists
+        self.hide()
+        self.setEnabled(False)
 
     def set_from_props(self, props: dict):
         if not props: return
         self.sld_opacity.blockSignals(True); self.sld_opacity.setValue(props.get("opacity", 100)); self.sld_opacity.blockSignals(False)
         self.sld_angle.blockSignals(True); self.sld_angle.setValue(props.get("angle", 0)); self.sld_angle.blockSignals(False)
-
-    # full collapse with animation & signal
-    def set_expanded(self, expanded: bool):
-        cur_expanded = (self.maximumWidth() > 0)
-        if expanded == cur_expanded:
-            self.expandedChanged.emit(expanded)
-            return
-        anim = QPropertyAnimation(self, b"maximumWidth", self)
-        anim.setDuration(220); anim.setEasingCurve(QEasingCurve.OutCubic)
-        anim.setStartValue(self.maximumWidth()); anim.setEndValue(260 if expanded else 0)
-        def _after():
-            self.expandedChanged.emit(expanded)
-        anim.finished.connect(_after)
-        anim.start(); self._anim = anim
-
-    def toggle(self): self.set_expanded(self.maximumWidth() == 0)
 
 # ---------------- Note tab ----------------
 
@@ -734,11 +809,38 @@ class NoteTabWidget(QWidget):
         title_row.addWidget(self.title_input); title_row.addWidget(self.counter)
         title_area.addWidget(lbl); title_area.addLayout(title_row); root.addLayout(title_area)
 
-        # Top toolbar
+        # Top toolbar (UNIFORM style, text tools BEFORE draw tools)
         tb = QHBoxLayout(); tb.setSpacing(6)
+
         def tb_btn(name, tip):
             b = QToolButton(); b.setIcon(QIcon(PHOTO(name))); b.setIconSize(QSize(28,28))
             b.setToolTip(tip); b.setObjectName("notesTB"); return b
+
+        # text-formatting (left side)
+        def mk_txt_btn(txt, tip):
+            b = QToolButton(); b.setText(txt); b.setToolTip(tip); b.setObjectName("notesTB")
+            return b
+
+        self.btn_bold = mk_txt_btn("B", "Bold")
+        self.btn_italic = mk_txt_btn("I", "Italic")
+        self.btn_underline = mk_txt_btn("U", "Underline")
+        self.btn_bullets = mk_txt_btn("•", "Bulleted list")
+
+        self.cb_fontsize = QComboBox(); self.cb_fontsize.setObjectName("notesTB")
+        self.cb_fontsize.addItems([str(s) for s in (10,12,14,16,18,20,24,28,32)])
+        self.cb_fontsize.setCurrentText("14")
+
+        self.btn_fontcolor = QToolButton(); self.btn_fontcolor.setObjectName("notesTB"); self.btn_fontcolor.setText("A")
+        self.btn_fontcolor.setToolTip("Font color")
+        self._font_color = QColor("#000000")
+        self._refresh_font_color_button()
+
+        for w in (self.btn_bold, self.btn_italic, self.btn_underline, self.btn_bullets, self.cb_fontsize, self.btn_fontcolor):
+            tb.addWidget(w)
+
+        tb.addWidget(QLabel("  |  "))
+
+        # draw tools (right side of text tools)
         self.btn_img  = tb_btn("image.png", "Insert Image")
         self.btn_undo = tb_btn("undo.png", "Undo")
         self.btn_redo = tb_btn("redo_notes.png", "Redo")
@@ -746,9 +848,10 @@ class NoteTabWidget(QWidget):
         self.btn_pen    = tb_btn("pen.png", "Pen")
         self.btn_mark   = tb_btn("marker.png", "Highlighter")
         self.btn_eras   = tb_btn("eraser.png", "Eraser")
-        for b in (self.btn_img, self.btn_undo, self.btn_redo,
-                  self.btn_pencil, self.btn_pen, self.btn_mark, self.btn_eras):
+
+        for b in (self.btn_img, self.btn_undo, self.btn_redo, self.btn_pencil, self.btn_pen, self.btn_mark, self.btn_eras):
             tb.addWidget(b)
+
         tb.addStretch(); root.addLayout(tb)
 
         # Main area
@@ -756,29 +859,24 @@ class NoteTabWidget(QWidget):
         wrap = QFrame(); wrap.setObjectName("noteBG")
         wrap_lay = QHBoxLayout(wrap); wrap_lay.setContentsMargins(10,10,10,10); wrap_lay.setSpacing(6)
 
-        self.editor = InkTextEdit(); self.editor.setPlainText(content)
+        self.editor = InkTextEdit()
         if overlay: self.editor.dict_to_overlay(overlay)
+        if content and "<" in content and "</" in content:
+            self.editor.setHtml(content)
+        else:
+            self.editor.setPlainText(content)
         wrap_lay.addWidget(self.editor, 1)
 
-        # Image panel + "peek" tab
+        # Image tools panel (auto open when image exists; no extra icon)
         self.img_panel = ImageToolsPanel(); wrap_lay.addWidget(self.img_panel, 0)
-        self.img_peek = QToolButton(); self.img_peek.setObjectName("imgPeek")
-        self.img_peek.setIcon(QIcon(PHOTO("image.png"))); self.img_peek.setIconSize(QSize(18,18))
-        self.img_peek.setFixedWidth(18); self.img_peek.setToolTip("Image tools")
-        self.img_peek.clicked.connect(lambda: self.img_panel.set_expanded(True))
-        wrap_lay.addWidget(self.img_peek, 0, Qt.AlignVCenter)
-        self.img_peek.hide()
 
         # Wire panel ↔ editor
-        self.img_panel.startCrop.connect(self.editor.begin_crop)
         self.img_panel.rotateStep.connect(self.editor.rotate_selected_step)
         self.img_panel.rotateTo.connect(self.editor.rotate_selected_to)
         self.img_panel.setOpacity.connect(self.editor.set_selected_opacity)
-        self.img_panel.resetReq.connect(self.editor.reset_selected_image)
         self.img_panel.cropShapeChanged.connect(self.editor.set_crop_shape)
         self.img_panel.cropRatioChanged.connect(self.editor.set_crop_ratio_string)
-        self.img_panel.cropSizeEdited.connect(self.editor.set_crop_size)
-        self.img_panel.expandedChanged.connect(lambda expanded: self.img_peek.setVisible(not expanded))
+        self.img_panel.startCrop.connect(self.editor.begin_crop)
 
         # Editor signals → panel visibility / enabling
         self.editor.selectionChangedForImage.connect(self._on_image_selection_change)
@@ -798,12 +896,17 @@ class NoteTabWidget(QWidget):
         self.btn_mark.clicked.connect  (lambda: self._tool_popup("marker", self.btn_mark))
         self.btn_eras.clicked.connect  (lambda: self._tool_popup("eraser", self.btn_eras))
 
+        self.btn_bold.clicked.connect(self._toggle_bold)
+        self.btn_italic.clicked.connect(self._toggle_italic)
+        self.btn_underline.clicked.connect(self._toggle_underline)
+        self.btn_bullets.clicked.connect(self._toggle_bullets)
+        self.cb_fontsize.currentTextChanged.connect(self._change_font_size)
+        self.btn_fontcolor.clicked.connect(self._pick_font_color)
+
         # Use same PNGs for toolbar + cursors
         ICON_SIZE = 40; BTN_PAD = 16
         def _apply_big(btn): btn.setIconSize(QSize(ICON_SIZE, ICON_SIZE)); btn.setFixedSize(ICON_SIZE+BTN_PAD, ICON_SIZE+BTN_PAD)
         for b in (self.btn_pencil, self.btn_pen, self.btn_mark, self.btn_eras): _apply_big(b)
-        for b in (self.btn_pencil, self.btn_pen, self.btn_mark, self.btn_eras):
-            b.setStyleSheet("QToolButton{border:2px solid #0b1f5e;border-radius:12px;background:#fff;}QToolButton:hover{background:#e9eef7;}")
 
         pencil_path = PHOTO("pencil.png")
         pen_path    = PHOTO("pen.png")
@@ -812,37 +915,96 @@ class NoteTabWidget(QWidget):
         self.editor.set_tool_pixmaps({"pencil":pencil_path,"pen":pen_path,"marker":marker_path,"eraser":eraser_path},
                                      base_size=ICON_SIZE)
 
-        self._update_tool_button_styles()
+        # UNIFORM toolbar styling for everything
+        uni_css = (
+            "QToolButton#notesTB{"
+            "  border:2px solid #0b1f5e; border-radius:12px; background:#fff; padding:6px 10px;"
+            "}"
+            "QToolButton#notesTB:hover{ background:#e9eef7; }"
+            "QComboBox#notesTB{"
+            "  border:2px solid #0b1f5e; border-radius:12px; padding:4px 8px; background:#fff; min-width:56px;"
+            "}"
+            "QComboBox#notesTB::drop-down{ width: 0px; }"
+        )
+        for w in (self.btn_bold, self.btn_italic, self.btn_underline, self.btn_bullets, self.cb_fontsize,
+                  self.btn_fontcolor, self.btn_img, self.btn_undo, self.btn_redo,
+                  self.btn_pencil, self.btn_pen, self.btn_mark, self.btn_eras):
+            try: w.setStyleSheet(uni_css)
+            except Exception: pass
 
     # ---- UI helpers ----
-    def _q_rgba(self, c: QColor, a: int = 60) -> str:
-        return f"rgba({c.red()},{c.green()},{c.blue()},{max(0,min(255,a))})"
+    def _refresh_font_color_button(self):
+        col = self._font_color.name()
+        self.btn_fontcolor.setStyleSheet(
+            "QToolButton#notesTB{border:2px solid #0b1f5e;border-radius:12px;background:#fff;padding:6px 10px;}"
+            "QToolButton#notesTB:hover{background:#e9eef7;}"
+            f"QToolButton#notesTB{{color:#0b1f5e;}}"
+        )
+        self.btn_fontcolor.setText("A")
+        self.btn_fontcolor.setToolTip(f"Font color ({col})")
 
-    def _update_tool_button_styles(self):
-        # Colored border + soft tint to indicate current tool color
-        pc = self.editor.colors["pencil"]; pen = self.editor.colors["pen"]; mk = self.editor.colors["marker"]
-        self.btn_pencil.setStyleSheet(
-            f"QToolButton{{border:2px solid {pc.name()};border-radius:12px;background:{self._q_rgba(pc,40)};}}"
-            "QToolButton:hover{background:#e9eef7;}"
-        )
-        self.btn_pen.setStyleSheet(
-            f"QToolButton{{border:2px solid {pen.name()};border-radius:12px;background:{self._q_rgba(pen,30)};}}"
-            "QToolButton:hover{background:#e9eef7;}"
-        )
-        self.btn_mark.setStyleSheet(
-            f"QToolButton{{border:2px solid {mk.name()};border-radius:12px;background:{self._q_rgba(mk,70)};}}"
-            "QToolButton:hover{background:#e9eef7;}"
-        )
-        # Eraser keeps neutral frame
-        self.btn_eras.setStyleSheet("QToolButton{border:2px solid #0b1f5e;border-radius:12px;background:#fff;}QToolButton:hover{background:#e9eef7;}")
+    # ---- text formatting slots ----
+    def _merge_fmt(self, fmt: QTextCharFormat):
+        cur = self.editor.textCursor()
+        if not cur.hasSelection():
+            self.editor.mergeCurrentCharFormat(fmt)
+        else:
+            cur.mergeCharFormat(fmt)
+            self.editor.mergeCurrentCharFormat(fmt)
+
+    def _toggle_bold(self):
+        fmt = QTextCharFormat()
+        fmt.setFontWeight(QFont.Normal if self.editor.fontWeight() > QFont.Normal else QFont.Bold)
+        self._merge_fmt(fmt)
+
+    def _toggle_italic(self):
+        fmt = QTextCharFormat()
+        fmt.setFontItalic(not self.editor.fontItalic())
+        self._merge_fmt(fmt)
+
+    def _toggle_underline(self):
+        fmt = QTextCharFormat()
+        fmt.setFontUnderline(not self.editor.fontUnderline())
+        self._merge_fmt(fmt)
+
+    def _toggle_bullets(self):
+        cur = self.editor.textCursor()
+        if cur.currentList():
+            lst = cur.currentList()
+            cur.beginEditBlock()
+            block = cur.block()
+            lst.remove(block)
+            cur.endEditBlock()
+        else:
+            lf = QTextListFormat(); lf.setStyle(QTextListFormat.ListDisc)
+            cur.createList(lf)
+
+    def _change_font_size(self, s: str):
+        try: val = float(s)
+        except Exception: return
+        fmt = QTextCharFormat(); fmt.setFontPointSize(val)
+        self._merge_fmt(fmt)
+
+    def _pick_font_color(self):
+        c = QColorDialog.getColor(self._font_color, self, "Font color", QColorDialog.DontUseNativeDialog)
+        if c.isValid():
+            self._font_color = c
+            fmt = QTextCharFormat(); fmt.setForeground(c)
+            self._merge_fmt(fmt)
+            self._refresh_font_color_button()
 
     def _on_image_count_change(self, count: int):
+        # Panel only visible when images exist
         self.img_panel.setVisible(count > 0)
-        self.img_peek.setVisible(False)
-        self.img_panel.setEnabled(False)
+        self.img_panel.setEnabled(count > 0)
+        if count > 0:
+            # auto open
+            self.img_panel.show()
 
     def _on_image_selection_change(self, has):
-        self.img_panel.setEnabled(has)
+        self.img_panel.setEnabled(has or len(self.editor.images) > 0)
+        if has and not self.img_panel.isVisible():
+            self.img_panel.show()
         if has:
             props = self.editor.get_selected_props()
             self.img_panel.set_from_props(props)
@@ -856,11 +1018,11 @@ class NoteTabWidget(QWidget):
 
         # Color picker (ONLY for pencil/pen/marker)
         if name in ("pencil", "pen", "marker"):
-            pal_path = PHOTO("palette.png")
-            if pal_path:
-                pal_lbl = QLabel(w)
-                pal_lbl.setPixmap(QPixmap(pal_path).scaled(35,35, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                row.addWidget(pal_lbl)
+            pal_lbl = QLabel(w)
+            pal_icon = PHOTO("palette.png")
+            if pal_icon:
+                pal_lbl.setPixmap(QPixmap(pal_icon).scaled(35,35, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            row.addWidget(pal_lbl)
 
             swatch = QPushButton("  "); swatch.setFixedSize(28,28)
             def _set_swatch(col: QColor):
@@ -873,7 +1035,6 @@ class NoteTabWidget(QWidget):
                 if c.isValid():
                     self.editor.colors[name] = c
                     _set_swatch(c)
-                    self._update_tool_button_styles()
 
             swatch.clicked.connect(_pick)
             row.addWidget(swatch)
@@ -892,7 +1053,6 @@ class NoteTabWidget(QWidget):
         for fpt, wv in sizes: row.addWidget(dot(fpt, wv))
 
         if name == "eraser":
-            # Only Normal/Lasso toggles; NO color picker
             row.addWidget(QLabel("  |  ", w))
             nbtn = QPushButton("Normal", w); lbtn = QPushButton("Lasso", w)
             nbtn.clicked.connect(lambda: (self.editor.set_eraser_mode("normal"), self.editor._apply_tool_cursor(), menu.close()))
@@ -916,8 +1076,9 @@ class NoteTabWidget(QWidget):
                             "opacity": im["opacity"], "angle": im["angle"]})
         overlay["images"] = img_out
 
+        # Save content as HTML so formatting persists
         return {"title": (self.title_input.text().strip() or "Untitled"),
-                "content": self.editor.toPlainText(),
+                "content": self.editor.toHtml(),
                 "overlay": overlay,
                 "updated_at": datetime.utcnow().isoformat()}
 
@@ -950,7 +1111,7 @@ class NoteOrganizerWidget(QWidget):
         def tb_btn(name, tip):
             b = QToolButton(); b.setIcon(QIcon(PHOTO(name))); b.setIconSize(QSize(26,26))
             b.setToolTip(tip); b.setObjectName("notesTB"); return b
-        self.btn_back = tb_btn("back.png", "Back")
+        self.btn_back = tb_btn("notes_back.png", "Back")
         self.btn_new  = tb_btn("new.png", "New Note")
         self.btn_save = tb_btn("save.png", "Save")
         self.btn_export = QToolButton(); self.btn_export.setObjectName("notesTB"); self.btn_export.setText("Export")
@@ -984,8 +1145,17 @@ class NoteOrganizerWidget(QWidget):
 
     # ----- internal helpers -----
     def _open_by_id(self, nid: int):
+        # if already open, just focus that tab
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if isinstance(w, NoteTabWidget) and getattr(w, "note_id", None) == nid:
+                self.tabs.setCurrentIndex(i)
+                return
+
         row = db.get_note(nid)
-        if not row: return
+        if not row:
+            return
+
         tab = NoteTabWidget(nid, row["title"] or "Untitled", row["content"] or "", overlay=None)
         idx = self.tabs.addTab(tab, self._elided(row["title"] or "Untitled"))
         self.tabs.setCurrentIndex(idx)
