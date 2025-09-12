@@ -2,7 +2,7 @@
 # Notes editor (text + inking) backed by SQLite for note title/content only.
 # Image/ink overlay is runtime-only for now; exports work as before.
 
-import os, io, shutil
+import os
 from datetime import datetime
 
 from styles.notes_organizer_styles import get_notes_organizer_styles
@@ -20,15 +20,6 @@ from PyQt5.QtWidgets import (
     QTabWidget, QFileDialog, QToolButton, QMenu, QPushButton, QWidgetAction,
     QFrame, QSlider, QComboBox, QSpinBox, QColorDialog
 )
-
-# ---------- Optional OCR (graceful fallback) ----------
-_TESSERACT_OK = False
-try:
-    import pytesseract
-    if shutil.which("tesseract"):
-        _TESSERACT_OK = True
-except Exception:
-    pass
 
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MEDIA_DIR = os.path.join(APP_ROOT, "notes_media")
@@ -598,18 +589,6 @@ class InkTextEdit(QTextEdit):
         for s in self.strokes: s.paint(p, 0)
         p.end(); return img
 
-    def ocr_selected_image(self) -> str:
-        if not _TESSERACT_OK or self.selected_idx is None: return ""
-        try:
-            # Local import to avoid hard dependency if OCR disabled
-            from PyQt5.QtCore import QBuffer
-            pm = self.images[self.selected_idx]["pm"]
-            buf = QBuffer(); buf.open(QBuffer.ReadWrite)
-            pm.toImage().save(buf, "PNG")
-            return pytesseract.image_to_string(io.BytesIO(bytes(buf.data())))
-        except Exception:
-            return ""
-
 # ---------------- Image Tools Panel ----------------
 
 class ImageToolsPanel(QFrame):
@@ -761,14 +740,13 @@ class NoteTabWidget(QWidget):
             b = QToolButton(); b.setIcon(QIcon(PHOTO(name))); b.setIconSize(QSize(28,28))
             b.setToolTip(tip); b.setObjectName("notesTB"); return b
         self.btn_img  = tb_btn("image.png", "Insert Image")
-        self.btn_ocr  = tb_btn("ocr.png", "Run OCR on selected image")
         self.btn_undo = tb_btn("undo.png", "Undo")
         self.btn_redo = tb_btn("redo_notes.png", "Redo")
         self.btn_pencil = tb_btn("pencil.png", "Pencil")
         self.btn_pen    = tb_btn("pen.png", "Pen")
         self.btn_mark   = tb_btn("marker.png", "Highlighter")
         self.btn_eras   = tb_btn("eraser.png", "Eraser")
-        for b in (self.btn_img, self.btn_ocr, self.btn_undo, self.btn_redo,
+        for b in (self.btn_img, self.btn_undo, self.btn_redo,
                   self.btn_pencil, self.btn_pen, self.btn_mark, self.btn_eras):
             tb.addWidget(b)
         tb.addStretch(); root.addLayout(tb)
@@ -814,7 +792,6 @@ class NoteTabWidget(QWidget):
 
         # Actions
         self.btn_img.clicked.connect(self._insert_image)
-        self.btn_ocr.clicked.connect(self._ocr)
         self.btn_undo.clicked.connect(self.editor.undo); self.btn_redo.clicked.connect(self.editor.redo)
         self.btn_pencil.clicked.connect(lambda: self._tool_popup("pencil", self.btn_pencil))
         self.btn_pen.clicked.connect   (lambda: self._tool_popup("pen",    self.btn_pen))
@@ -947,15 +924,6 @@ class NoteTabWidget(QWidget):
     def _insert_image(self):
         path, _ = QFileDialog.getOpenFileName(self, "Insert Image", "", "Images (*.png *.jpg *.jpeg)")
         if path: self.editor.insert_image(path)
-
-    def _ocr(self):
-        if not _TESSERACT_OK:
-            QMessageBox.information(self, "OCR", "Tesseract OCR not available. Install it and ensure it's on PATH."); return
-        if self.editor.selected_idx is None:
-            QMessageBox.information(self, "OCR", "Click an image to select it, then press OCR."); return
-        text = self.editor.ocr_selected_image().strip()
-        if text: self.editor.append("\n" + text)
-        else: QMessageBox.information(self, "OCR", "No readable text found.")
 
 # ---------------- Organizer ----------------
 

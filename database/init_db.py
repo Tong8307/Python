@@ -61,16 +61,16 @@ CREATE TABLE IF NOT EXISTS features (
 
 # 5) Bookings
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS bookings (
+CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL,
-    date TEXT NOT NULL,
-    start_time TEXT NOT NULL,
-    end_time TEXT NOT NULL,
-    status TEXT CHECK(status IN ('booked','cancelled','completed')) NOT NULL DEFAULT 'booked',
-    created_by TEXT NOT NULL,
-    FOREIGN KEY (room_id)    REFERENCES rooms(id),
-    FOREIGN KEY (created_by) REFERENCES users(student_id)
+    folder_id INTEGER NULL,
+    title TEXT NOT NULL CHECK (length(title) <= 50),
+    content TEXT,
+    cover_path TEXT,
+    file_path TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (folder_id) REFERENCES folders(id)
 )
 """)
 
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS booking_students (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL CHECK (length(name) <= 50),
     parent_id INTEGER,
     color TEXT DEFAULT '#FFFFFF',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -104,7 +104,7 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id INTEGER NULL,
-    title TEXT NOT NULL,
+    title TEXT NOT NULL CHECK (length(title) <= 50),
     content TEXT,
     cover_path TEXT,
     file_path TEXT,

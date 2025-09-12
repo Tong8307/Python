@@ -1,6 +1,3 @@
-# dashboard.py
-# simplified & commented lightly
-
 import os
 from datetime import datetime
 
@@ -502,7 +499,7 @@ class DashboardWidget(QWidget):
                 elif self.current_folder_id == -1:
                     self.empty_label.setText("All your notes are within folders.\nNo notes are uncategorized.")
                 else:
-                    self.empty_label.setText("No notes found.\nClick + to add a new note.")
+                    self.empty_label.setText("No notes found in this folder.\nClick + to add a new note.")
             return
 
         # list view
@@ -563,11 +560,17 @@ class DashboardWidget(QWidget):
         name, ok = QInputDialog.getText(self, "Rename Folder", "Folder name:", text=old_name or "")
         if not (ok and name.strip()): return
         new_name = name.strip()
+
+        if len(new_name) > 50:
+            QMessageBox.warning(self, "Name too long", "Folder name must be 50 characters or fewer.")
+            return
+
         conn = self._db(); cur = conn.cursor()
         cur.execute("UPDATE folders SET name=? WHERE id=?", (new_name, folder_id))
         conn.commit(); conn.close()
         QMessageBox.information(self, "Folder Renamed", f"You renamed the folder into '{new_name}'.")
         self._refresh_folders(); self._refilter_notes()
+
 
     def _delete_folder(self, folder_id, folder_name):
         if QMessageBox.question(
@@ -751,11 +754,18 @@ class DashboardWidget(QWidget):
     def _note_rename(self, note_id, old_title):
         name, ok = QInputDialog.getText(self, "Rename Note", "New title:", text=old_title or "")
         if not (ok and name.strip()): return
+        new_title = name.strip()
+
+        if len(new_title) > 50:
+            QMessageBox.warning(self, "Title too long", "Note title must be 50 characters or fewer.")
+            return
+
         conn = self._db(); cur = conn.cursor()
-        cur.execute("UPDATE notes SET title=? WHERE id=?", (name.strip(), note_id))
+        cur.execute("UPDATE notes SET title=? WHERE id=?", (new_title, note_id))
         conn.commit(); conn.close()
-        QMessageBox.information(self, "Note Renamed", f"You renamed the note into '{name.strip()}'.")
+        QMessageBox.information(self, "Note Renamed", f"You renamed the note into '{new_title}'.")
         self._refilter_notes()
+
 
     def _note_delete(self, note_id, title):
         shown = title or "Untitled"
