@@ -322,7 +322,7 @@ class MainWindow(QMainWindow):
         features = [
             ("Photo/note_icon.png", "Note Organizer"),
             ("Photo/discussion.png", "Room Booking"),
-            ("Photo/gpa_icon.png", "Academic Tools"),
+            ("Photo/academic.png", "Academic Tools"),
             ("Photo/QA_icon.png", "Q & A sessions"),
         ]
 
@@ -418,16 +418,6 @@ class MainWindow(QMainWindow):
         self.room_booking_widget_by_location = RoomBookingWidget(self, location_id, self.user_id)
         self.pages.addWidget(self.room_booking_widget_by_location)
         self.pages.setCurrentWidget(self.room_booking_widget_by_location)
-    
-    def open_gpa_calculator_page(self, user_id):
-        # Clean up previous GPA widget if exists
-        if hasattr(self, 'gpa_calculator_widget'):
-            self.pages.removeWidget(self.gpa_calculator_widget)
-            self.gpa_calculator_widget.deleteLater()
-
-        self.gpa_calculator_widget = GPACalculatorWidget(self)
-        self.pages.addWidget(self.gpa_calculator_widget)
-        self.pages.setCurrentWidget(self.gpa_calculator_widget)
 
     def logout(self):
         # Reset user info
@@ -444,21 +434,26 @@ class MainWindow(QMainWindow):
         # Hide menu button when logged out
         self.menu_btn.setVisible(False)
         
-        # Clear main app pages
-        if self.feature_grid_page:
-            self.pages.removeWidget(self.feature_grid_page)
-            self.feature_grid_page.deleteLater()
-            self.feature_grid_page = None
-            
-        if self.location_selection_page:
-            self.pages.removeWidget(self.location_selection_page)
-            self.location_selection_page.deleteLater()
-            self.location_selection_page = None
+        # Clear main app pages SAFELY
+        widgets_to_remove = [
+            self.feature_grid_page,
+            self.location_selection_page,
+            self.gpa_calculator_widget
+        ]
         
-        if self.gpa_calculator_widget:
-            self.pages.removeWidget(self.gpa_calculator_widget)
-            self.gpa_calculator_widget.deleteLater()
-            self.gpa_calculator_widget = None
+        for widget in widgets_to_remove:
+            if widget is not None:
+                try:
+                    if self.pages.indexOf(widget) != -1:
+                        self.pages.removeWidget(widget)
+                    widget.deleteLater()
+                except Exception as e:
+                    print(f"Error removing widget: {e}")
+        
+        # Reset references
+        self.feature_grid_page = None
+        self.location_selection_page = None
+        self.gpa_calculator_widget = None
         
         # Hide menu
         self.hide_menu()

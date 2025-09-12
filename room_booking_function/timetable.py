@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QSpinBox, QHBoxLayout,
-    QDateEdit, QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea, QGridLayout, QToolTip
+    QDateEdit, QTableWidget, QTableWidgetItem, QAbstractItemView, 
+    QAbstractScrollArea, QGridLayout, QToolTip, QComboBox
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
-from database.db_manager import get_rooms_by_location, get_bookings_for_timetable
+from database.db_manager import get_rooms_by_location, get_bookings_for_timetable, get_features
 from styles.timetable_styles import get_timetable_styles
 
 class TimetablePage(QWidget):
@@ -14,6 +15,7 @@ class TimetablePage(QWidget):
         self.location_id = main_window.location_id
         self.location_name = main_window.location_name
         self.user_capacity = 1
+        self.selected_feature = "all"  # Default to show all features
 
         # Setup UI
         self.timetable()
@@ -29,9 +31,34 @@ class TimetablePage(QWidget):
         title.setAlignment(Qt.AlignLeft)
         layout.addWidget(title)
 
-        # Filters
+        # Feature filter on first line
+        feature_layout = QHBoxLayout()
+        lbl_feature = QLabel("Feature:")
+        lbl_feature.setObjectName("formLabel")
+        self.feature_combo = QComboBox()
+        self.feature_combo.setObjectName("featureCombo")
+        self.feature_combo.setMinimumWidth(450)  # Wide enough for full feature names
+        
+        # Add "All Features" option
+        self.feature_combo.addItem("All Features", "all")
+        
+        # Add features from database with full names
+        features = get_features()
+        for feature_id, feature_name in features:
+            self.feature_combo.addItem(feature_name, feature_id)
+        
+        self.feature_combo.currentIndexChanged.connect(self.on_feature_changed)
+
+        feature_layout.addWidget(lbl_feature)
+        feature_layout.addWidget(self.feature_combo)
+        feature_layout.addStretch()
+        layout.addLayout(feature_layout)
+
+        # Date and Capacity filters on second line
         filter_layout = QHBoxLayout()
-        lbl_date = QLabel("Select Date:")
+        
+        # Date filter
+        lbl_date = QLabel("Date:")
         lbl_date.setObjectName("formLabel")
         self.date_edit = QDateEdit()
         self.date_edit.setObjectName("dateEdit")
@@ -41,17 +68,21 @@ class TimetablePage(QWidget):
         self.date_edit.setDateRange(QDate.currentDate(), QDate.currentDate().addDays(6))
         self.date_edit.dateChanged.connect(self.show_timetable)
 
-        lbl_cap = QLabel("Minimum Capacity:")
+        # Capacity filter
+        lbl_cap = QLabel("Capacity:")
         lbl_cap.setObjectName("formLabel")
         self.capacity_spin = QSpinBox()
         self.capacity_spin.setObjectName("capacitySpin")
         self.capacity_spin.setMinimum(1)
-        self.capacity_spin.setMaximum(10)  # max 10
+        self.capacity_spin.setMaximum(10) 
         self.capacity_spin.setValue(1)
         self.capacity_spin.valueChanged.connect(self.on_capacity_changed)
 
+        # Add filters to layout with proper spacing
         filter_layout.addWidget(lbl_date)
         filter_layout.addWidget(self.date_edit)
+        filter_layout.addSpacing(20)  # Add spacing between filters
+        
         filter_layout.addWidget(lbl_cap)
         filter_layout.addWidget(self.capacity_spin)
         filter_layout.addStretch()
@@ -76,11 +107,11 @@ class TimetablePage(QWidget):
         self.top_header.setShowGrid(False)
         self.top_header.setFrameShape(QTableWidget.NoFrame)
 
-        # Left header (rooms)
+        # Left header (rooms) - Make it wider to accommodate feature names
         self.left_header = QTableWidget()
         self.left_header.verticalHeader().hide()
         self.left_header.horizontalHeader().hide()
-        self.left_header.setFixedWidth(160)
+        self.left_header.setFixedWidth(150)  # Width for room names only
         self.left_header.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.left_header.setShowGrid(False)
         self.left_header.setFrameShape(QTableWidget.NoFrame)
@@ -112,11 +143,36 @@ class TimetablePage(QWidget):
     def on_capacity_changed(self, cap):
         self.user_capacity = cap
         self.show_timetable()
+        
+    def on_feature_changed(self, index):
+        self.selected_feature = self.feature_combo.currentData()
+        self.show_timetable()
 
     def show_timetable(self):
         selected_date = self.date_edit.date().toString("yyyy-MM-dd")
         rooms = get_rooms_by_location(self.location_id)
-        filtered_rooms = [(r, n, c) for (r, n, c) in rooms if c >= self.user_capacity]
+        
+        # Filter rooms by capacity and feature
+        filtered_rooms = []
+        for room_data in rooms:
+            # Handle both old (3 values) and new (5 values) format
+            if len(room_data) == 3:
+                room_id, room_name, capacity = room_data
+                feature_id, feature_name = "unknown", "Unknown Feature"
+            elif len(room_data) >= 5:
+                room_id, room_name, capacity, feature_id, feature_name = room_data[:5]
+            else:
+                continue  # Skip invalid data
+                
+            # Check capacity
+            if capacity < self.user_capacity:
+                continue
+                
+            # Check feature filter
+            if self.selected_feature != "all" and feature_id != self.selected_feature:
+                continue
+                
+            filtered_rooms.append((room_id, room_name, capacity, feature_id, feature_name))
 
         # Clear previous content
         self.table.setRowCount(0)
@@ -124,14 +180,20 @@ class TimetablePage(QWidget):
         self.top_header.setColumnCount(0)
 
         if not filtered_rooms:
-            # Show "No rooms available" message
+            # Show "No rooms available" message with styling
             self.table.setRowCount(1)
-            self.table.setColumnCount(5)  # Use multiple columns for the message
-            self.table.setSpan(0, 0, 1, 5)  # Make the message span all columns
-            item = QTableWidgetItem("No rooms available with the selected capacity")
+            self.table.setColumnCount(1)
+            item = QTableWidgetItem("No rooms available with the selected filters")
             item.setTextAlignment(Qt.AlignCenter)
             item.setFlags(Qt.ItemIsEnabled)
+            item.setBackground(QColor("#f8f9fa"))  # Light gray background
+            item.setForeground(QColor("#6c757d"))  # Muted text color
             self.table.setItem(0, 0, item)
+            
+            # Set column width to span the entire table
+            self.table.setColumnWidth(0, 800)
+            self.table.setRowHeight(0, 60)  # Make the message row taller
+            
             return
 
         # Time slots
@@ -157,9 +219,9 @@ class TimetablePage(QWidget):
             self.top_header.item(0, col).setBackground(QColor("#DBDEF5"))
             self.top_header.item(0, col).setForeground(QColor("#000000"))
 
-        # Fill left header
-        for row, (room_id, room_name, capacity) in enumerate(filtered_rooms):
-            item = QTableWidgetItem(f"{room_name}")
+        # Fill left header with room names only
+        for row, (room_id, room_name, capacity, feature_id, feature_name) in enumerate(filtered_rooms):
+            item = QTableWidgetItem(room_name)
             item.setTextAlignment(Qt.AlignCenter)
             item.setFlags(Qt.ItemIsEnabled)
             self.left_header.setItem(row, 0, item)
@@ -167,7 +229,7 @@ class TimetablePage(QWidget):
             self.left_header.item(row, 0).setForeground(QColor("#000000"))
 
         # Fill main grid
-        for row, (room_id, room_name, capacity) in enumerate(filtered_rooms):
+        for row, (room_id, room_name, capacity, feature_id, feature_name) in enumerate(filtered_rooms):
             bookings = get_bookings_for_timetable(room_id, selected_date)
             for col, ts in enumerate(time_slots):
                 booked = any(
@@ -182,14 +244,19 @@ class TimetablePage(QWidget):
                 else:
                     item.setBackground(QColor("#28a745"))  # Green for available
                     item.setData(Qt.UserRole, "available")
-                # Tooltip on hover
-                item.setToolTip(
-                    f"Room: {room_name}\nCapacity: {capacity}\nStatus: {item.data(Qt.UserRole).capitalize()}"
+                
+                # Enhanced tooltip with feature information
+                tooltip_text = (
+                    f"Room: {room_name}\n"
+                    f"Capacity: {capacity}\n"
+                    f"Feature: {feature_name}\n"
+                    f"Status: {item.data(Qt.UserRole).capitalize()}"
                 )
+                item.setToolTip(tooltip_text)
                 self.table.setItem(row, col, item)
 
         # Column/row sizes
-        self.left_header.setColumnWidth(0, 160)
+        self.left_header.setColumnWidth(0, 150)  # Width for room names only
         for col in range(cols):
             self.top_header.setColumnWidth(col, 80)
             self.table.setColumnWidth(col, 80)

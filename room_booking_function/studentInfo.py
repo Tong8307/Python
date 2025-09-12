@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QLineEdit, QPushButton, QFrame, QSizePolicy, QScrollArea)  # Added QScrollArea
+                             QLineEdit, QPushButton, QFrame, QSizePolicy, QScrollArea)
 from PyQt5.QtCore import Qt
 from database.db_manager import get_student_name
 
@@ -63,6 +63,8 @@ class StudentInfoPage(QWidget):
             id_field = QLineEdit(id_input.text())
             id_field.setPlaceholderText("Enter student ID")
             id_field.setMinimumWidth(150)
+            # Connect textChanged signal to convert to uppercase
+            id_field.textChanged.connect(self.convert_to_uppercase)
 
             # Name field
             name_label = QLabel("Name:")
@@ -106,6 +108,15 @@ class StudentInfoPage(QWidget):
         button_layout.addWidget(back_btn)
         button_layout.addWidget(save_btn)
         layout.addLayout(button_layout)
+
+    def convert_to_uppercase(self):
+        """Convert student ID input to uppercase in real-time"""
+        sender = self.sender()
+        if isinstance(sender, QLineEdit):
+            cursor_pos = sender.cursorPosition()
+            text = sender.text().upper()
+            sender.setText(text)
+            sender.setCursorPosition(cursor_pos)
 
     def update_name_field(self, student_id, name_field):
         student_name = get_student_name(student_id.strip()) if student_id.strip() else ""

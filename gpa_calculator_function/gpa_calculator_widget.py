@@ -24,8 +24,10 @@ class GPACalculatorWidget(QWidget):
         # Apply styles
         self.setStyleSheet(gpa_styles())
 
-        # Main layout and stacked widget
+        # Main layout
         self.main_layout = QVBoxLayout(self)
+        
+        # Stacked widget FIRST
         self.pages = QStackedWidget()
         self.main_layout.addWidget(self.pages)
         
@@ -36,9 +38,23 @@ class GPACalculatorWidget(QWidget):
         # Show feature grid by default
         self.pages.setCurrentWidget(self.feature_grid_page)
         
-        # Back button
+        # Back button LAST (without position specification)
         self.setup_back_button()
 
+    def setup_back_button(self):
+        """Back button shown on all pages - add to layout LAST"""
+        self.back_btn = QPushButton()
+        self.back_btn.setIcon(QIcon("Photo/back.png"))
+        self.back_btn.setText(" Back to Home")
+        self.back_btn.setFixedSize(750, 40)
+        self.back_btn.setCursor(Qt.PointingHandCursor)
+        self.back_btn.setObjectName("iconBackButton")
+        self.back_btn.setIconSize(QSize(16, 16))
+        self.back_btn.clicked.connect(self.handle_back)
+        # ✅ Changed: No position specified, just alignment
+        self.main_layout.addWidget(self.back_btn, alignment=Qt.AlignCenter)
+
+    # ... rest of the methods remain the same ...
     def create_feature_grid_page(self):
         """Create the main GPA feature selection grid"""
         self.feature_grid_page = QWidget()
@@ -86,18 +102,6 @@ class GPACalculatorWidget(QWidget):
         self.pages.addWidget(self.goal_calculator_page)
         self.pages.addWidget(self.history_page)
         self.pages.addWidget(self.grading_scheme_page)
-
-    def setup_back_button(self):
-        """Back button shown on all pages"""
-        self.back_btn = QPushButton()
-        self.back_btn.setIcon(QIcon("Photo/back.png"))
-        self.back_btn.setText(" Back to Home")
-        self.back_btn.setFixedSize(750, 40)
-        self.back_btn.setCursor(Qt.PointingHandCursor)
-        self.back_btn.setObjectName("iconBackButton")
-        self.back_btn.setIconSize(QSize(16, 16))
-        self.back_btn.clicked.connect(self.handle_back)
-        self.main_layout.addWidget(self.back_btn, 0, Qt.AlignCenter)
 
     def store_back_button_state(self):
         """Store the current back button state"""

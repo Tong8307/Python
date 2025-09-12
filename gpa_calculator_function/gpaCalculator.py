@@ -60,6 +60,7 @@ class GPACalculatorPage(QWidget):
         reset_btn = QPushButton("Reset")
         reset_btn.setIcon(QIcon("Photo/reset.png"))
         reset_btn.setObjectName("resetButton")
+        reset_btn.setCursor(Qt.PointingHandCursor) 
         reset_btn.setFixedSize(110, 45)
         reset_btn.clicked.connect(self.reset_all)
         title_bar.addWidget(reset_btn)
@@ -68,6 +69,7 @@ class GPACalculatorPage(QWidget):
         history_btn = QPushButton("View History")
         history_btn.setIcon(QIcon("Photo/history_gpa.png"))
         history_btn.setObjectName("historyButton")
+        history_btn.setCursor(Qt.PointingHandCursor) 
         history_btn.setFixedSize(180, 45)
         history_btn.clicked.connect(self.show_history)
         title_bar.addWidget(history_btn)
@@ -113,6 +115,7 @@ class GPACalculatorPage(QWidget):
         # Create group box for current academic status
         status_group = QGroupBox("Current Academic Status")
         status_group.setObjectName("statusGroup")
+        status_group.setMinimumHeight(200)
         status_layout = QGridLayout(status_group)
         status_layout.setVerticalSpacing(10)
         status_layout.setHorizontalSpacing(15)
@@ -144,13 +147,14 @@ class GPACalculatorPage(QWidget):
         course_group = QGroupBox("Courses")
         course_group.setObjectName("courseGroup")
         course_layout = QVBoxLayout(course_group)
+        course_layout.setSpacing(12)
         
         # Course section header
         course_header = QHBoxLayout()
         course_header.setContentsMargins(0, 0, 0, 0)
 
         # Courses label on the left
-        course_label = QLabel("Course Name")
+        course_label = QLabel("Course")
         course_label.setObjectName("course_header")
         course_header.addWidget(course_label)
 
@@ -183,7 +187,7 @@ class GPACalculatorPage(QWidget):
         course_content = QWidget()
         self.course_content_layout = QVBoxLayout(course_content)
         self.course_content_layout.setAlignment(Qt.AlignTop)
-        self.course_content_layout.setSpacing(2)
+        self.course_content_layout.setSpacing(12)
         self.course_content_layout.setContentsMargins(0, 0, 0, 0)
         
         # Add initial course rows
@@ -196,6 +200,7 @@ class GPACalculatorPage(QWidget):
         add_btn_inside = QPushButton("Add Course")
         add_btn_inside.setIcon(QIcon("Photo/plus.png"))
         add_btn_inside.setObjectName("addCourseButton")
+        add_btn_inside.setCursor(Qt.PointingHandCursor)
         add_btn_inside.setFixedSize(300, 35)
         add_btn_inside.clicked.connect(self.add_course_row)
         course_layout.addWidget(add_btn_inside, alignment=Qt.AlignLeft)  # ← Centered
@@ -210,12 +215,12 @@ class GPACalculatorPage(QWidget):
         result_card = QFrame()
         result_card.setObjectName("resultCard")
         result_card.setMaximumWidth(200)
-        result_card.setMaximumHeight(520)
+        result_card.setMaximumHeight(540)
         result_card.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         
         result_layout = QVBoxLayout(result_card)
         result_layout.setAlignment(Qt.AlignCenter)
-        result_layout.setSpacing(10)
+        result_layout.setSpacing(12)
         result_layout.setContentsMargins(5, 8, 5, 8)
         
         # Add title to result card
@@ -235,7 +240,7 @@ class GPACalculatorPage(QWidget):
         for label_text, value_label in result_items:
             # Create a container for each result item
             item_container = QVBoxLayout()
-            item_container.setSpacing(10)
+            item_container.setSpacing(12)
             item_container.setAlignment(Qt.AlignCenter)
             
             # Label for the item
@@ -273,7 +278,8 @@ class GPACalculatorPage(QWidget):
         save_btn = QPushButton(" Save My Calculation")
         save_btn.setIcon(QIcon("Photo/save.png"))
         save_btn.setObjectName("saveButton")
-        save_btn.setFixedSize(760, 43)
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setFixedSize(770, 43)
         save_btn.clicked.connect(self.save_current_calculation)
         button_container.addWidget(save_btn)
         
@@ -282,7 +288,8 @@ class GPACalculatorPage(QWidget):
 
     def add_course_row(self):
         row_widget = QWidget()
-        row_layout = QHBoxLayout(row_widget)
+        row_layout = QHBoxLayout()
+        row_widget.setLayout(row_layout)
         row_layout.setContentsMargins(0, 5, 0, 5)
         row_layout.setSpacing(8)
 
@@ -294,6 +301,7 @@ class GPACalculatorPage(QWidget):
         credits.setRange(0, 10)
         credits.setValue(0)
         credits.setFixedWidth(75)
+        credits.setFixedHeight(35)
         credits.valueChanged.connect(self.update_results)
 
         grade = QComboBox()
@@ -306,6 +314,7 @@ class GPACalculatorPage(QWidget):
         remove_btn = QPushButton("×")
         remove_btn.setFixedSize(35, 35)
         remove_btn.setObjectName("removeCourseButton")
+        remove_btn.setCursor(Qt.PointingHandCursor)
         remove_btn.clicked.connect(lambda: self.remove_course_row(row_widget))
 
         row_layout.addWidget(name, 1)
@@ -523,7 +532,18 @@ class GPACalculatorPage(QWidget):
     def show_history(self):
         """Show history from GPA calculator page - should return to calculator"""
         history_data = get_gpa_history(self.current_user_id)
-        # Pass a flag indicating we came from calculator page
+        
+        # Create history page with proper parent reference
         history_page = GPAHistory(self.main_window, history_data, self, from_calculator=True)
+        
+        # Add to main window's pages stack
         self.main_window.pages.addWidget(history_page)
         self.main_window.pages.setCurrentWidget(history_page)
+        
+        # Update back button text
+        if hasattr(self.main_window, 'back_btn'):
+            self.main_window.back_btn.setText(" Back")
+            
+        # Store the current state for proper back navigation
+        if hasattr(self.main_window, 'store_back_button_state'):
+            self.main_window.store_back_button_state()

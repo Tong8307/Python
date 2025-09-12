@@ -105,11 +105,13 @@ def get_location_name(location_id):
 # ROOMS
 # -----------------
 def get_rooms_by_location(location_id):
+    """Get all rooms for a specific location with feature information"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT r.id, r.name, r.capacity 
+        SELECT r.id, r.name, r.capacity, f.id as feature_id, f.name as feature_name
         FROM rooms r 
+        LEFT JOIN features f ON r.feature_id = f.id
         WHERE r.location_id = ?
         ORDER BY r.name
     ''', (location_id,))
@@ -138,20 +140,6 @@ def get_features():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name FROM features ORDER BY name")
-    result = cursor.fetchall()
-    conn.close()
-    return result
-
-def get_rooms_by_feature(location_id, feature_id):
-    """Get rooms that have a specific feature"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT r.id, r.name, r.capacity 
-        FROM rooms r 
-        WHERE r.location_id = ? AND r.feature_id = ?
-        ORDER BY r.capacity, r.name
-    ''', (location_id, feature_id))
     result = cursor.fetchall()
     conn.close()
     return result
@@ -409,14 +397,15 @@ def get_bookings_for_timetable(room_id, date):
     return result
 
 def get_rooms_by_location(location_id):
-    """Get all rooms for a specific location"""
+    """Get all rooms for a specific location with feature information"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT id, name, capacity 
-        FROM rooms 
-        WHERE location_id = ?
-        ORDER BY name
+        SELECT r.id, r.name, r.capacity, f.id as feature_id, f.name as feature_name
+        FROM rooms r 
+        LEFT JOIN features f ON r.feature_id = f.id
+        WHERE r.location_id = ?
+        ORDER BY r.name
     ''', (location_id,))
     result = cursor.fetchall()
     conn.close()

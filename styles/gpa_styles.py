@@ -69,9 +69,11 @@ def gpa_styles():
             padding: 0 5px 0 5px;
         }
         
-        #statusGroup, #courseGroup {
+        #statusGroup, #courseGroup, #inputGroup, #resultGroup, #chartGroup {
             background-color: white;
-            padding: 10px;
+            padding: 20px;
+            font-size: 30px;
+            font-weight: bold;
         }
 
         QComboBox {
@@ -99,20 +101,6 @@ def gpa_styles():
         QComboBox QAbstractItemView::item:selected {
             background-color: #3949AB;
             color: white;
-        }
-
-        QPushButton {
-            background-color: #3949AB;
-            color: white;
-            border-radius: 4px;
-            padding: 8px;
-            font-weight: 500;
-            font-size: 14px;
-            border: none;
-        }
-
-        QPushButton:hover {
-            background-color: #5C6BC0;
         }
 
         QLabel {
@@ -373,5 +361,37 @@ def gpa_styles():
             font-size: 28px;
             font-weight: 500;
         }
-        
-    """
+
+        QTableWidget {
+            background-color: #ffffff;
+            border: 1px solid #E1D7F6;
+            gridline-color: #f0f0f0;
+            alternate-background-color: #faf8fd;
+            selection-color: white;
+            font-weight: 600;
+            font-size: 14px;
+            outline: 0;
+        }
+
+        /* Table items with proper text wrapping */
+        QTableWidget::item {
+            padding: 10px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #4B4B4C;
+            white-space: pre-wrap; /* This ensures text wraps */
+        }
+
+        /* Header with text wrapping */
+        QHeaderView::section {
+            background-color: #f3e9fd;
+            color: #673AB7;
+            font-weight: bold;
+            padding: 12px;
+            border: none;
+            font-size: 17px;
+            text-align: center;
+            min-height: 40px;
+            white-space: pre-wrap; /* Allow header text to wrap */
+        }
+                
+"""

@@ -127,18 +127,51 @@ cursor.executemany("INSERT OR IGNORE INTO features (id, name) VALUES (?, ?)", [
 
 # Insert Rooms with feature_id
 cursor.executemany("INSERT OR IGNORE INTO rooms (id, location_id, capacity, name, feature_id) VALUES (?, ?, ?, ?, ?)", [
-    ('R101', 1, 6, 'Room C204', 'F01'),
-    ('R102', 1, 8, 'Room C280', 'F02'),
-    ('R201', 2, 4, 'Room L222', 'F03'),
-    ('R202', 2, 10, 'Room L888', 'F04'),
-    ('R301', 3, 5, 'Room A012', 'F05'),
-    ('R302', 3, 12, 'Room A125', 'F05'),
-    ('R303', 3, 5, 'Room A012', 'F02'),
-    ('R304', 3, 10, 'Room A124', 'F01'),
-    ('R305', 3, 2, 'Room A028', 'F03'),
-    ('R306', 3, 3, 'Room A129', 'F04'),
-    ('R307', 3, 6, 'Room A038', 'F02'),
-    ('R308', 3, 5, 'Room A175', 'F03')
+    # Location 1 additional rooms
+    ('R111', 1, 4, 'Room C209', 'F01'),
+    ('R112', 1, 8, 'Room C285', 'F02'),
+    ('R113', 1, 2, 'Room C210', 'F03'),
+    ('R114', 1, 6, 'Room C286', 'F04'),
+    ('R115', 1, 10, 'Room C211', 'F05'),
+    ('R116', 1, 3, 'Room C287', 'F01'),
+    ('R117', 1, 7, 'Room C212', 'F02'),
+    ('R118', 1, 5, 'Room C288', 'F03'),
+    ('R119', 1, 1, 'Room C213', 'F04'),
+    ('R120', 1, 9, 'Room C289', 'F05'),
+    
+    # Location 2 additional rooms
+    ('R211', 2, 5, 'Room L227', 'F01'),
+    ('R212', 2, 9, 'Room L893', 'F02'),
+    ('R213', 2, 3, 'Room L228', 'F03'),
+    ('R214', 2, 7, 'Room L894', 'F04'),
+    ('R215', 2, 1, 'Room L229', 'F05'),
+    ('R216', 2, 6, 'Room L895', 'F01'),
+    ('R217', 2, 4, 'Room L230', 'F02'),
+    ('R218', 2, 8, 'Room L896', 'F03'),
+    ('R219', 2, 2, 'Room L231', 'F04'),
+    ('R220', 2, 10, 'Room L897', 'F05'),
+    
+    # Location 3 additional rooms
+    ('R319', 3, 7, 'Room A033', 'F01'),
+    ('R320', 3, 2, 'Room A181', 'F02'),
+    ('R321', 3, 9, 'Room A034', 'F03'),
+    ('R322', 3, 4, 'Room A182', 'F04'),
+    ('R323', 3, 8, 'Room A035', 'F05'),
+    ('R324', 3, 3, 'Room A183', 'F01'),
+    ('R325', 3, 6, 'Room A036', 'F02'),
+    ('R326', 3, 1, 'Room A184', 'F03'),
+    ('R327', 3, 5, 'Room A037', 'F04'),
+    ('R328', 3, 10, 'Room A185', 'F05'),
+    ('R329', 3, 4, 'Room A038', 'F01'),
+    ('R330', 3, 7, 'Room A186', 'F02'),
+    ('R331', 3, 2, 'Room A039', 'F03'),
+    ('R332', 3, 8, 'Room A187', 'F04'),
+    ('R333', 3, 5, 'Room A040', 'F05'),
+    ('R334', 3, 3, 'Room A188', 'F01'),
+    ('R335', 3, 6, 'Room A041', 'F02'),
+    ('R336', 3, 9, 'Room A189', 'F03'),
+    ('R337', 3, 1, 'Room A042', 'F04'),
+    ('R338', 3, 10, 'Room A190', 'F05')
 ])
 
 # Insert Users with hashed passwords

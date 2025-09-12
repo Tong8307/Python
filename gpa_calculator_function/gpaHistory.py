@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QTableWidget, QTableWidgetItem, 
-                             QHeaderView, QPushButton, QGroupBox, QGridLayout, QHBoxLayout, QStackedWidget)
+                             QHeaderView, QPushButton, QStackedWidget)
 from PyQt5.QtCore import Qt
 from datetime import datetime
 from styles.gpa_styles import gpa_styles
@@ -20,10 +20,6 @@ class GPAHistory(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # Clear any existing layout
-        if self.layout():
-            QWidget().setLayout(self.layout())
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         
@@ -59,8 +55,13 @@ class GPAHistory(QWidget):
             self.table.setHorizontalHeaderLabels([
                 "Date", "Semester\nCredits", "Semester\nGPA", "Total\nCredits", "Current\nCGPA", "Previous\nCGPA", "Actions"
             ])
+            
+            # Enable word wrap for headers and content
             self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             self.table.verticalHeader().setVisible(False)
+            
+            # Set word wrap for all items
+            self.table.setWordWrap(True)
             
             # Populate table
             for i, record in enumerate(self.history_data):
@@ -68,17 +69,46 @@ class GPAHistory(QWidget):
                 date_obj = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
                 date_str = date_obj.strftime("%Y-%m-%d %H:%M")
                 
-                self.table.setItem(i, 0, QTableWidgetItem(date_str))
-                self.table.setItem(i, 1, QTableWidgetItem(str(record['semester_credits'])))
-                self.table.setItem(i, 2, QTableWidgetItem(f"{record['gpa']:.2f}"))
-                self.table.setItem(i, 3, QTableWidgetItem(str(record['total_credits'])))
-                self.table.setItem(i, 4, QTableWidgetItem(f"{record['cgpa']:.2f}"))
-                self.table.setItem(i, 5, QTableWidgetItem(f"{record['current_cgpa']:.2f} ({record['completed_credits']} credits)"))
+                # Create items with word wrap enabled
+                date_item = QTableWidgetItem(date_str)
+                date_item.setTextAlignment(Qt.AlignLeft)
+                
+                credits_item = QTableWidgetItem(str(record['semester_credits']))
+                credits_item.setTextAlignment(Qt.AlignCenter)
+                
+                gpa_item = QTableWidgetItem(f"{record['gpa']:.2f}")
+                gpa_item.setTextAlignment(Qt.AlignCenter)
+                
+                total_credits_item = QTableWidgetItem(str(record['total_credits']))
+                total_credits_item.setTextAlignment(Qt.AlignCenter)
+                
+                cgpa_item = QTableWidgetItem(f"{record['cgpa']:.2f}")
+                cgpa_item.setTextAlignment(Qt.AlignCenter)
+                
+                prev_cgpa_text = f"{record['current_cgpa']:.2f} ({record['completed_credits']} credits)"
+                prev_cgpa_item = QTableWidgetItem(prev_cgpa_text)
+                prev_cgpa_item.setTextAlignment(Qt.AlignLeft)
+                
+                # Set items to the table
+                self.table.setItem(i, 0, date_item)
+                self.table.setItem(i, 1, credits_item)
+                self.table.setItem(i, 2, gpa_item)
+                self.table.setItem(i, 3, total_credits_item)
+                self.table.setItem(i, 4, cgpa_item)
+                self.table.setItem(i, 5, prev_cgpa_item)
                 
                 view_btn = QPushButton("Details")
                 view_btn.setObjectName("detailsButton")
+                view_btn.setCursor(Qt.PointingHandCursor) 
                 view_btn.clicked.connect(lambda checked, r=record: self.view_details(r))
                 self.table.setCellWidget(i, 6, view_btn)
+
+            # Enable word wrapping and resize rows to fit content
+            self.table.setWordWrap(True)
+            self.table.resizeRowsToContents()
+            
+            # Set row height policy to ensure all content is visible
+            self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
 
             self.table.setEditTriggers(QTableWidget.NoEditTriggers)
             self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -92,7 +122,6 @@ class GPAHistory(QWidget):
         else:
             self.history_stack.addWidget(self.table_widget)
         
-        self.history_stack.setCurrentWidget(self.table_widget)
         self.history_stack.setCurrentWidget(self.table_widget)
         
         # When on table view, back button should go to calculator's feature grid

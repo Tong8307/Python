@@ -259,6 +259,23 @@ class NewBookingPage(QWidget):
         self.update_student_inputs(count)
         self.update_room_info()
     
+    def convert_to_uppercase(self, text):
+        """Convert input to uppercase as user types"""
+        sender = self.sender()
+        # Get current cursor position
+        cursor_position = sender.cursorPosition()
+        
+        # Convert text to uppercase
+        uppercase_text = text.upper()
+        
+        # Only update if the text has actually changed (to avoid infinite loop)
+        if uppercase_text != text:
+            sender.blockSignals(True)  # Block signals temporarily
+            sender.setText(uppercase_text)
+            # Restore cursor position
+            sender.setCursorPosition(cursor_position)
+            sender.blockSignals(False)  # Unblock signals
+    
     def update_student_inputs(self, count):
         """Update the student input fields based on the count"""
         # Clear existing inputs
@@ -306,6 +323,7 @@ class NewBookingPage(QWidget):
             id_label.setObjectName("formLabel")
             id_input = QLineEdit()
             id_input.setPlaceholderText("Enter student ID")
+            id_input.textChanged.connect(self.convert_to_uppercase)
             id_input.textChanged.connect(self.on_student_id_changed)
             
             # Student Name (will be auto-filled or manually entered)
@@ -330,6 +348,8 @@ class NewBookingPage(QWidget):
     def on_student_id_changed(self, text):
         """Auto-fill student name when ID is entered"""
         sender = self.sender()
+        text = text.upper()  # Ensure we're working with uppercase
+        
         if text.strip() and len(text.strip()) >= 3:  # Only search if ID has reasonable length
             # Find the corresponding name input
             for id_input, name_input in self.student_inputs:

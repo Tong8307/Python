@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QGroupBox, QGridLayout, QVBoxLayout, QPushButton, QSpacerItem, QSizePolicy, QScrollArea
+    QWidget, QVBoxLayout, QLabel, QGroupBox, QGridLayout, QPushButton, QSizePolicy, QScrollArea
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -16,6 +16,10 @@ class GPAHistoryDetails(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        # Create main layout for THIS widget (self)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
         # Create a scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -26,25 +30,26 @@ class GPAHistoryDetails(QWidget):
         container_widget = QWidget()
         scroll_area.setWidget(container_widget)
         
-        # Main layout for the container
-        layout = QVBoxLayout(container_widget)
-        layout.setSpacing(10)
-        layout.setContentsMargins(0, 0, 0, 0)
+        # Layout for the container widget - DON'T create another layout for self
+        container_layout = QVBoxLayout(container_widget)  # This is for container_widget, not self
+        container_layout.setSpacing(10)
+        container_layout.setContentsMargins(0, 0, 0, 0)
 
         # Title
         title = QLabel("History Details")
         title.setObjectName("gpaHeader")
-        layout.addWidget(title)
-        layout.addSpacing(10)
+        container_layout.addWidget(title)
+        container_layout.addSpacing(10)
 
         # Date
         date_obj = datetime.fromisoformat(self.record['timestamp'].replace('Z', '+00:00'))
         date_label = QLabel(f"Date: {date_obj.strftime('%Y-%m-%d %H:%M')}")
-        layout.addWidget(date_label)
-        layout.addSpacing(10)
+        container_layout.addWidget(date_label)
+        container_layout.addSpacing(10)
 
         # Results section
         results_group = QGroupBox("Results")
+        results_group.setObjectName("resultGroup")
         results_group.setContentsMargins(10, 20, 10, 10)
         results_layout = QGridLayout(results_group)
         results_layout.setSpacing(15)
@@ -68,11 +73,12 @@ class GPAHistoryDetails(QWidget):
         results_layout.addWidget(QLabel("CGPA:"), 5, 0)
         results_layout.addWidget(QLabel(f"{self.record['cgpa']:.2f}"), 5, 1)
 
-        layout.addWidget(results_group)
-        layout.addSpacing(15)
+        container_layout.addWidget(results_group)
+        container_layout.addSpacing(15)
 
         # Courses section
         courses_group = QGroupBox("Courses")
+        courses_group.setObjectName("courseGroup")
         courses_group.setContentsMargins(10, 20, 10, 10)
         courses_layout = QVBoxLayout(courses_group)
         courses_layout.setSpacing(15)
@@ -86,11 +92,12 @@ class GPAHistoryDetails(QWidget):
         else:
             courses_layout.addWidget(QLabel("No course data available"))
 
-        layout.addWidget(courses_group)
-        layout.addSpacing(15)
+        container_layout.addWidget(courses_group)
+        container_layout.addSpacing(15)
 
         # Performance Comparison Chart
         chart_group = QGroupBox("Performance Comparison")
+        chart_group.setObjectName("chartGroup")
         chart_group.setContentsMargins(10, 20, 10, 10)
         chart_layout = QVBoxLayout(chart_group)
         chart_layout.setSpacing(10)
@@ -145,12 +152,10 @@ class GPAHistoryDetails(QWidget):
         performance_label.setAlignment(Qt.AlignCenter)
         chart_layout.addWidget(performance_label)
 
-        layout.addWidget(chart_group)
+        container_layout.addWidget(chart_group)
 
-         # Add stretch at the end
-        layout.addStretch()
+        # Add stretch at the end
+        container_layout.addStretch()
 
-        # Set the scroll area as the main widget of this page
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        # Add scroll area to the main layout (this is the only widget in main_layout)
         main_layout.addWidget(scroll_area)

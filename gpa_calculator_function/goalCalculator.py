@@ -32,6 +32,7 @@ class GoalCalculatorPage(QWidget):
         reset_btn = QPushButton("Reset")
         reset_btn.setIcon(QIcon("Photo/reset.png"))
         reset_btn.setObjectName("resetButton")
+        reset_btn.setCursor(Qt.PointingHandCursor) 
         reset_btn.setFixedSize(110, 45)
         reset_btn.clicked.connect(self.reset_all)
         title_bar.addWidget(reset_btn)
@@ -46,6 +47,7 @@ class GoalCalculatorPage(QWidget):
         
         # Input Group
         input_group = QGroupBox("Input Parameters")
+        input_group.setObjectName("inputGroup")
         input_layout = QGridLayout(input_group)
         input_layout.setSpacing(10)
         
@@ -88,11 +90,13 @@ class GoalCalculatorPage(QWidget):
         # Calculate Button
         calculate_btn = QPushButton("Calculate Required GPA")
         calculate_btn.setObjectName("calculateButton")
+        calculate_btn.setCursor(Qt.PointingHandCursor) 
         calculate_btn.clicked.connect(self.calculate_required_gpa)
         layout.addWidget(calculate_btn)
         
         # Results Group (initially hidden)
         self.results_group = QGroupBox("Results")
+        self.results_group.setObjectName("resultGroup")
         self.results_group.setVisible(False)
         results_layout = QVBoxLayout(self.results_group)
         
@@ -118,6 +122,8 @@ class GoalCalculatorPage(QWidget):
     def validate_numeric_input(self, text, field_name, is_float=False, allow_zero=False):
         """Validate numeric input and return valid status and value"""
         try:
+            if not text.strip():  # Check for empty input first
+                return False, 0  # Return False but don't show error here
                 
             if is_float:
                 value = float(text)
@@ -142,33 +148,59 @@ class GoalCalculatorPage(QWidget):
             QMessageBox.warning(self, "Invalid Input", 
                             f"Please enter a valid number for {field_name}")
             return False, 0
-    
+
     def calculate_required_gpa(self):
-        # Validate all inputs
-        cgpa_valid, current_cgpa = self.validate_numeric_input(
+        # Collect all validation results first
+        validations = []
+        
+        validations.append(self.validate_numeric_input(
             self.current_cgpa_input.text(), "Current CGPA", is_float=True
-        )
+        ))
         
-        credits_valid, completed_credits = self.validate_numeric_input(
+        validations.append(self.validate_numeric_input(
             self.completed_credits_input.text(), "Completed Credits"
-        )
+        ))
         
-        target_valid, target_cgpa = self.validate_numeric_input(
+        validations.append(self.validate_numeric_input(
             self.target_cgpa_input.text(), "Target CGPA", is_float=True
-        )
+        ))
         
-        future_credits_valid, future_credits = self.validate_numeric_input(
+        validations.append(self.validate_numeric_input(
             self.future_credits_input.text(), "Next Semester Credits", allow_zero=False
-        )
+        ))
         
-        # Check if all inputs are valid
-        if not all([cgpa_valid, credits_valid, target_valid, future_credits_valid]):
+        # Check if any fields are empty
+        empty_fields = []
+        if not self.current_cgpa_input.text().strip():
+            empty_fields.append("Current CGPA")
+        if not self.completed_credits_input.text().strip():
+            empty_fields.append("Completed Credits")
+        if not self.target_cgpa_input.text().strip():
+            empty_fields.append("Target CGPA")
+        if not self.future_credits_input.text().strip():
+            empty_fields.append("Next Semester Credits")
+        
+        # Show single error message for empty fields
+        if empty_fields:
+            field_list = ", ".join(empty_fields)
+            QMessageBox.warning(self, "Missing Inputs", 
+                            f"Please fill in the following fields:\n{field_list}")
             return
+        
+        # Check if all inputs are valid (no range errors)
+        if not all([valid for valid, value in validations]):
+            return  # Error messages already shown by validate_numeric_input
+        
+        # Extract the values
+        current_cgpa = validations[0][1]
+        completed_credits = validations[1][1]
+        target_cgpa = validations[2][1]
+        future_credits = validations[3][1]
         
         # Additional validation: Target CGPA should be achievable
         if target_cgpa < current_cgpa:
             QMessageBox.warning(self, "Invalid Target", 
-                              "Target CGPA cannot be lower than current CGPA")
+                            "Target CGPA cannot be lower than current CGPA")
             return
             
         # Calculate required GPA
@@ -184,7 +216,7 @@ class GoalCalculatorPage(QWidget):
             
         # Set the explanation
         explanation_text = f"""To reach your target CGPA of {target_cgpa:.2f}, you need to get 
-a GPA of {required_gpa:.2f} in your next semester."""
+    a GPA of {required_gpa:.2f} in your next semester."""
             
         self.explanation_label.setText(explanation_text)
 
