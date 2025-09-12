@@ -1,0 +1,3 @@
+Welcome to Your Notes App
+
+👋 Welcome! Use the ➕ button to add notes. You can organize notes into folders anytime.

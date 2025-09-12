@@ -401,3 +401,100 @@ def get_rooms_by_location(location_id):
     result = cursor.fetchall()
     conn.close()
     return result
+
+# -----------------
+# NOTES (for Notes Organizer)
+# -----------------
+
+def create_note(title="Untitled", content="", folder_id=None):
+    """Create a new note and return its id."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO notes (folder_id, title, content)
+        VALUES (?, ?, ?)
+    """, (folder_id, title, content))
+    nid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return nid
+
+def update_note(note_id, title, content, folder_id=None):
+    """Update an existing note. Bumps updated_at to now."""
+    conn = get_connection()
+    cur = conn.cursor()
+    if folder_id is None:
+        cur.execute("""
+            UPDATE notes
+            SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (title, content, note_id))
+    else:
+        cur.execute("""
+            UPDATE notes
+            SET title = ?, content = ?, folder_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (title, content, folder_id, note_id))
+    conn.commit()
+    conn.close()
+
+def get_note(note_id):
+    """Fetch one note as a dict (or None)."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, folder_id, title, content, created_at, updated_at
+        FROM notes
+        WHERE id = ?
+    """, (note_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "folder_id": row[1],
+        "title": row[2],
+        "content": row[3],
+        "created_at": row[4],
+        "updated_at": row[5],
+    }
+
+def list_notes(search=None, order="updated_desc", limit=None):
+    """
+    Return a list of notes as dicts.
+    order: "updated_desc" (default) or "name_asc"
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    sql = """
+        SELECT id, folder_id, title, content, created_at, updated_at
+        FROM notes
+    """
+    params = []
+    if search:
+        sql += " WHERE LOWER(title) LIKE ?"
+        params.append(f"%{search.lower()}%")
+    if order == "name_asc":
+        sql += " ORDER BY LOWER(title) ASC"
+    else:
+        sql += " ORDER BY datetime(updated_at) DESC, LOWER(title) ASC"
+    if limit:
+        sql += " LIMIT ?"
+        params.append(limit)
+
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    conn.close()
+    return [{
+        "id": r[0], "folder_id": r[1], "title": r[2], "content": r[3],
+        "created_at": r[4], "updated_at": r[5]
+    } for r in rows]
+
+def delete_note(note_id):
+    """Delete one note."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+    conn.commit()
+    conn.close()
