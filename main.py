@@ -124,7 +124,12 @@ class SlidingMenu(QWidget):
             return
         mw = self.parent()
         if not hasattr(mw, 'dashboard_page'):
-            mw.dashboard_page = DashboardWidget(on_add_note_clicked=mw.open_notes_page)
+            mw.dashboard_page = DashboardWidget(
+                on_add_note_clicked=mw.open_notes_page,
+                on_back_home=mw.back_to_home,
+                on_note_deleted=mw._on_dashboard_note_deleted, 
+                user_id=mw.user_id 
+            )
             mw.pages.addWidget(mw.dashboard_page)
         mw.pages.setCurrentWidget(mw.dashboard_page)
         mw.hide_menu()
@@ -301,7 +306,12 @@ class MainWindow(QMainWindow):
             self.pages.setCurrentWidget(self.location_selection_page)
         elif feature_name == "Note Organizer":
             if not hasattr(self, 'dashboard_page'):
-                self.dashboard_page = DashboardWidget(on_add_note_clicked=self.open_notes_page)
+                self.dashboard_page = DashboardWidget(
+                    on_add_note_clicked=self.open_notes_page,
+                    on_back_home=self.back_to_home,
+                    on_note_deleted=self._on_dashboard_note_deleted,  
+                    user_id=self.user_id,
+                )
                 self.pages.addWidget(self.dashboard_page)
             self.pages.setCurrentWidget(self.dashboard_page)
         else:
@@ -322,6 +332,20 @@ class MainWindow(QMainWindow):
     def back_to_dashboard(self):
         if hasattr(self, 'dashboard_page'):
             self.pages.setCurrentWidget(self.dashboard_page)
+
+    def back_to_home(self):
+        if self.feature_grid_page is None:
+            self.initialize_main_app()
+        self.pages.setCurrentWidget(self.feature_grid_page)
+        self.hide_menu()
+
+    # NEW: callback invoked by DashboardWidget after a note is deleted
+    def _on_dashboard_note_deleted(self, note_id: int):
+        if hasattr(self, 'notes_page') and hasattr(self.notes_page, 'close_tab_for_note'):
+            try:
+                self.notes_page.close_tab_for_note(note_id)
+            except Exception:
+                pass
 
     # Sliding menu
     def toggle_menu(self):

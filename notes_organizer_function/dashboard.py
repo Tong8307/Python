@@ -7,15 +7,15 @@ from PyQt5.QtWidgets import (
     QFileDialog, QInputDialog, QTableWidget, QTableWidgetItem, QAbstractItemView,
     QHeaderView, QListView
 )
-from PyQt5.QtCore import Qt, QSize, QPoint
-from PyQt5.QtGui import QIcon, QPixmap, QPdfWriter, QPainter  # pdf export
+from PyQt5.QtCore import Qt, QSize, QPoint, pyqtSignal
+from PyQt5.QtGui import QIcon, QPixmap
 
 from styles.dashboard_styles import get_dashboard_styles
 from database.db_manager import get_connection
 
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-# basic sizing
+# sizing
 SIDEBAR_WIDTH = 178
 PLUS_W        = 36
 SEARCH_W      = 260
@@ -24,7 +24,7 @@ ACTIONS_W     = 46
 LEVEL_STEP    = 14
 NOTE_EXTRA_INDENT = 12
 
-# quick asset finder
+# find first existing asset in common folders
 ASSET_DIRS = ["Photo", "assets", "icons", "images"]
 def _find_first(cands):
     for d in ASSET_DIRS:
@@ -39,9 +39,10 @@ FOLDER_ICON_PATH = _find_first(["folder.png"])
 FILTER_ICON_PATH = _find_first(["filter.png"])
 DOTS_ICON_PATH   = _find_first(["more.png"])
 EDIT_ICON_PATH   = _find_first(["edit.png"])
+BACK_ICON_PATH   = _find_first(["back.png", "notes_back.png"])
 
-# small clickable label used inside sidebar rows
 class _ClickLabel(QLabel):
+    """Label that calls a callback when clicked."""
     def __init__(self, text, on_click, parent=None):
         super().__init__(text, parent)
         self._on = on_click
@@ -50,8 +51,8 @@ class _ClickLabel(QLabel):
             self._on()
         super().mousePressEvent(e)
 
-# icon grid that keeps a fixed column count
 class FixedColumnsIconList(QListWidget):
+    """Icon grid with a fixed number of columns that resizes nicely."""
     def __init__(self, columns=5, base_item_h=110, icon_max=96, parent=None):
         super().__init__(parent)
         self.columns = max(1, int(columns))
@@ -81,24 +82,32 @@ class FixedColumnsIconList(QListWidget):
         self.setIconSize(QSize(icon, icon))
 
 class DashboardWidget(QWidget):
-    def __init__(self, on_add_note_clicked=None):
+    """
+    Notes dashboard:
+    - Left: folders (tree) and special items.
+    - Right: list or grid of notes.
+    - Top: search, sort, add.
+    """
+    noteDeleted = pyqtSignal(int)
+
+    def __init__(self, on_add_note_clicked=None, on_back_home=None, on_note_deleted=None, user_id=None):
         super().__init__()
         self.on_add_note_clicked = on_add_note_clicked
+        self.on_back_home = on_back_home
+        self.on_note_deleted = on_note_deleted
+        self.user_id = user_id 
 
-        # app level state
-        self.sort_mode = 0                      # 0=date, 1=name
-        self.current_folder_id = None           # None=All, -1=Uncategorized, else folder id
+        self.sort_mode = 0                # 0=date desc, 1=title asc
+        self.current_folder_id = None     # None=All, -1=Uncategorized
         self.current_folder_name = None
-        self._expanded_folders = set()          # expanded folder ids in sidebar
-        self.view_mode = "list"                 # "list" | "grid"
+        self._expanded_folders = set()    # track expanded nodes in sidebar
+        self.view_mode = "list"           # list or grid
 
-        # basic window setup
         self.setObjectName("dashboardRoot")
         self.setStyleSheet(get_dashboard_styles())
         self.setWindowTitle("Note Organizer Dashboard")
         self.setMinimumSize(760, 500)
 
-        # root layout
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(6)
@@ -108,30 +117,27 @@ class DashboardWidget(QWidget):
         self._setup_main()
         self._setup_footer()
 
-        # first fill
+        # initial data load
         self._refresh_folders()
         self._refresh_center()
         self._refilter_notes()
 
-    # ---------------- top bar ----------------
+    # ---------- top bar ----------
     def _setup_top(self):
         bar = QHBoxLayout(); bar.setSpacing(6)
 
         title = QLabel("Dashboard"); title.setObjectName("dashTitle")
 
-        # search box filters both list and grid
         self.search_bar = QLineEdit(placeholderText="Search notes…")
         self.search_bar.setObjectName("searchField")
         self.search_bar.setFixedWidth(SEARCH_W)
         self.search_bar.textChanged.connect(self._refilter_notes)
 
-        # sort (lives inside filter icon)
         self.filter_btn = QToolButton(objectName="filterBtn")
         if FILTER_ICON_PATH:
             self.filter_btn.setIcon(QIcon(FILTER_ICON_PATH))
         self._attach_sort_menu()
 
-        # view toggle
         self.btn_list = QPushButton("List", objectName="viewBtnLeft")
         self.btn_grid = QPushButton("Grid", objectName="viewBtnRight")
         for b in (self.btn_list, self.btn_grid): b.setCheckable(True)
@@ -140,18 +146,16 @@ class DashboardWidget(QWidget):
         grp.addButton(self.btn_list); grp.addButton(self.btn_grid)
         self.btn_list.clicked.connect(lambda: self._set_view_mode("list"))
         self.btn_grid.clicked.connect(lambda: self._set_view_mode("grid"))
-        seg = QHBoxLayout(); seg.setSpacing(0); seg.setContentsMargins(2,2,2,2)
+        seg = QHBoxLayout(); seg.setSpacing(0); seg.setContentsMargins(0,0,0,0)
         seg_wrap = QWidget(objectName="segWrap"); seg_wrap.setLayout(seg)
         seg.addWidget(self.btn_list); seg.addWidget(self.btn_grid)
 
-        # + menu (add note / folder / import)
         self.add_button = QToolButton(objectName="addButton")
         self.add_button.setText("+")
         self.add_button.setFixedWidth(PLUS_W)
         self.add_button.setPopupMode(QToolButton.InstantPopup)
         self._attach_add_menu()
 
-        # assemble
         bar.addWidget(title); bar.addStretch()
         bar.addWidget(self.search_bar)
         bar.addWidget(self.filter_btn)
@@ -160,7 +164,7 @@ class DashboardWidget(QWidget):
         self.layout.addLayout(bar)
 
     def _attach_sort_menu(self):
-        # sort popup (date/name)
+        """Build the sort menu and link actions."""
         m = QMenu(self); m.setObjectName("popupMenu")
         a_date = m.addAction("Sort by Date (new → old)")
         a_name = m.addAction("Sort by Name (A → Z)")
@@ -172,7 +176,7 @@ class DashboardWidget(QWidget):
         self.filter_btn.setPopupMode(QToolButton.InstantPopup)
 
     def _attach_add_menu(self):
-        # single + menu, just call the core helpers directly
+        """Build the + menu with note, folder, and import."""
         m = QMenu(self); m.setObjectName("addMenu")
         m.addAction("Add Note", lambda: self._add_note_here(self.current_folder_id))
         m.addAction("New Folder", lambda: self._add_subfolder(self.current_folder_id))
@@ -180,27 +184,28 @@ class DashboardWidget(QWidget):
         self.add_button.setMenu(m)
 
     def _set_sort_mode(self, mode):
+        """Apply a new sort mode then refresh."""
         if mode == self.sort_mode: return
         self.sort_mode = mode
         self._attach_sort_menu()
         self._refilter_notes()
 
-    # ---------------- main area ----------------
+    # ---------- main area ----------
     def _setup_main(self):
         main = QHBoxLayout(); main.setSpacing(6)
 
-        # left: folders + embedded notes (when expanded)
+        # sidebar: folders and special items
         self.folder_list = QListWidget(objectName="folderList")
         self.folder_list.setFixedWidth(SIDEBAR_WIDTH)
-        self.folder_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.folder_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.folder_list.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.folder_list.setAutoScroll(True)
         self.folder_list.itemClicked.connect(self._on_sidebar_click)
         self.folder_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.folder_list.customContextMenuRequested.connect(self._folder_context_menu)
         self.folder_list.currentItemChanged.connect(lambda *_: self._refresh_folder_row_styles())
 
-        # right: list + grid + empty label
+        # right: list or grid
         self.right = QVBoxLayout(); self.right.setSpacing(4)
 
         self.table = QTableWidget(0, 3, self)
@@ -213,9 +218,9 @@ class DashboardWidget(QWidget):
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         hdr = self.table.horizontalHeader()
         hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(0, QHeaderView.Stretch)          # name
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents) # date
-        hdr.setSectionResizeMode(2, QHeaderView.Fixed)            # actions
+        hdr.setSectionResizeMode(0, QHeaderView.Stretch)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.Fixed)
         self.table.setColumnWidth(2, ACTIONS_W)
         self.table.setHorizontalHeaderLabels(["Name", "Date Modified", ""])
         self.table.cellDoubleClicked.connect(self._open_row_by_doubleclick)
@@ -239,12 +244,13 @@ class DashboardWidget(QWidget):
         self.layout.addLayout(main)
 
     def _refresh_center(self):
-        # show only the active view
+        """Show either the table or the grid."""
         is_list = (self.view_mode == "list")
         self.table.setVisible(is_list)
         self.grid.setVisible(not is_list)
 
     def _set_view_mode(self, mode: str):
+        """Switch between list and grid views."""
         if mode == self.view_mode: return
         self.view_mode = mode
         self.btn_list.setChecked(mode == "list")
@@ -252,35 +258,48 @@ class DashboardWidget(QWidget):
         self._refresh_center()
         self._refilter_notes()
 
-    # ---------------- footer ----------------
+    # ---------- footer ----------
     def _setup_footer(self):
         foot = QHBoxLayout()
         self.status_label = QLabel("Ready", objectName="statusText")
         foot.addWidget(self.status_label); foot.addStretch()
         self.layout.addLayout(foot)
 
-    # ---------------- db helpers ----------------
+        # back to home action
+        self.btn_back_home = QPushButton()
+        self.btn_back_home.setObjectName("iconBackButton")
+        if BACK_ICON_PATH:
+            self.btn_back_home.setIcon(QIcon(BACK_ICON_PATH))
+        self.btn_back_home.setText(" Back to Home")
+        self.btn_back_home.setIconSize(QSize(16, 16))
+        self.btn_back_home.setFixedSize(750, 40)
+        self.btn_back_home.setCursor(Qt.PointingHandCursor)
+        self.btn_back_home.clicked.connect(self._go_home)
+        self.layout.addWidget(self.btn_back_home, 0, Qt.AlignCenter)
+
+    # ---------- db helpers ----------
     def _db(self):
+        """Open a DB connection."""
         return get_connection()
 
     def _folder_exists(self, folder_id):
-        # tiny helper to ensure a folder id still exists
+        """Check if a folder exists; return (exists, name_or_None)."""
         if folder_id in (None, -1):
             return True, None
         conn = self._db(); cur = conn.cursor()
-        cur.execute("SELECT name FROM folders WHERE id=?", (folder_id,))
+        cur.execute("SELECT name FROM folders WHERE id=? AND user_id=?", (folder_id, self.user_id))
         row = cur.fetchone(); conn.close()
         return (bool(row), row[0] if row else None)
 
-    # ---------------- sidebar build ----------------
+    # ---------- sidebar build ----------
     def _refresh_folders(self):
-        # rebuild the sidebar with special rows + folders (and notes if expanded)
+        """Rebuild the sidebar: special rows, folders, and expanded notes."""
         self.folder_list.clear()
         self._add_special_item_row("All Notes", "all")
         self._add_special_item_row("Uncategorized", "uncat")
 
         conn = self._db(); cur = conn.cursor()
-        cur.execute("SELECT id, name, parent_id FROM folders ORDER BY LOWER(name)")
+        cur.execute("SELECT id, name, parent_id FROM folders WHERE user_id=? ORDER BY LOWER(name)", (self.user_id,))
         rows = cur.fetchall(); conn.close()
 
         tree = {}
@@ -290,46 +309,70 @@ class DashboardWidget(QWidget):
         def add_branch(parent_id, level=0):
             for fid, name in sorted(tree.get(parent_id, []), key=lambda t: t[1].lower()):
                 self._add_folder_item_row(fid, name, level)
+
                 if fid in self._expanded_folders:
-                    add_branch(fid, level+1)
-                    # inline notes inside the expanded folder branch
                     conn2 = self._db(); cur2 = conn2.cursor()
-                    cur2.execute("SELECT id, title FROM notes WHERE folder_id=? ORDER BY LOWER(title)", (fid,))
+                    cur2.execute(
+                        "SELECT id, title FROM notes WHERE folder_id=? AND user_id=? ORDER BY LOWER(title)",
+                        (fid, self.user_id)
+                    )
                     for nid, title in cur2.fetchall():
-                        self._add_note_item_row(nid, title or "Untitled", level+1)
+                        self._add_note_item_row(nid, title or "Untitled", level + 1)
                     conn2.close()
+
+                    add_branch(fid, level + 1)
 
         add_branch(None)
         self._select_sidebar_row()
         self._refresh_folder_row_styles()
 
-    # single widget builder for sidebar rows (folder/note/special)
     def _row_widget(self, left_pad_px, icon_path, text, click_cb, show_edit=False, edit_cb=None):
-        it = QListWidgetItem(); it.setSizeHint(QSize(6 + left_pad_px + 220, 24))
+        # build the row widget for the sidebar list
+        it = QListWidgetItem()
         w = QWidget(); w.setObjectName("folderRow")
         w.setProperty("selected", False)
-        lay = QHBoxLayout(w); lay.setContentsMargins(6 + left_pad_px, 2, 4, 2); lay.setSpacing(6)
 
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(6 + left_pad_px, 2, 4, 2)
+        lay.setSpacing(6)
+
+        # optional icon
+        icon_w = 0
         if icon_path:
             ic = QLabel()
             pm = QPixmap(icon_path).scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             ic.setPixmap(pm)
             lay.addWidget(ic)
+            icon_w = 20
 
+        # clickable text
         lbl = _ClickLabel(text, click_cb); lbl.setObjectName("folderText")
         lbl.setToolTip(text)
         lay.addWidget(lbl, 1)
 
+        # optional inline edit button
+        edit_w = 0
         if show_edit and edit_cb:
             btn = QToolButton(w); btn.setObjectName("folderEdit")
             if EDIT_ICON_PATH: btn.setIcon(QIcon(EDIT_ICON_PATH))
             btn.setFixedSize(18, 18); btn.setAutoRaise(True); btn.setFocusPolicy(Qt.NoFocus)
             btn.clicked.connect(lambda _=False, b=btn: edit_cb(b))
             lay.addWidget(btn, 0, Qt.AlignRight)
+            edit_w = 18
+
+        # tell the list how wide this row really is so the horizontal scrollbar can appear
+        fm = lbl.fontMetrics()
+        text_px = fm.horizontalAdvance(text or "")
+        # margins (left+right), spacing, and small slop so text isn't cut at the edge
+        extra = (6 + left_pad_px) + 4 + 6 + 10
+        want_w = extra + icon_w + text_px + edit_w
+        it.setSizeHint(QSize(max(110, want_w), 24))
 
         return it, w
 
+
     def _add_special_item_row(self, label, tag):
+        """Add 'All Notes' / 'Uncategorized' rows."""
         def click():
             self.current_folder_id = None if tag == "all" else -1
             self.current_folder_name = None
@@ -340,6 +383,7 @@ class DashboardWidget(QWidget):
         self.folder_list.addItem(it); self.folder_list.setItemWidget(it, w)
 
     def _add_folder_item_row(self, fid, name, level):
+        """Add a folder row (with edit menu)."""
         it, w = self._row_widget(
             level * LEVEL_STEP, FOLDER_ICON_PATH, name,
             click_cb=lambda _=False, _fid=fid, _name=name: self._on_folder_row_clicked(_fid, _name),
@@ -350,6 +394,7 @@ class DashboardWidget(QWidget):
         self.folder_list.addItem(it); self.folder_list.setItemWidget(it, w)
 
     def _add_note_item_row(self, nid, title, level):
+        """Add an inline note row under an expanded folder."""
         it, w = self._row_widget(
             level * LEVEL_STEP + NOTE_EXTRA_INDENT, FILE_ICON_PATH, title or "Untitled",
             click_cb=lambda _nid=nid: self._open_note_from_sidebar(_nid),
@@ -359,19 +404,22 @@ class DashboardWidget(QWidget):
         self.folder_list.addItem(it); self.folder_list.setItemWidget(it, w)
 
     def _refresh_folder_row_styles(self):
-        # toggle the "selected" dynamic property for qss
+        """Keep custom row widgets visually in sync with selection."""
         current = self.folder_list.currentItem()
         for i in range(self.folder_list.count()):
             it = self.folder_list.item(i)
             w = self.folder_list.itemWidget(it)
-            if not w: continue
+            if not w:
+                continue
             selected = (it is current)
             if w.property("selected") != selected:
                 w.setProperty("selected", selected)
-                w.style().unpolish(w); w.style().polish(w)
+            w.style().unpolish(w); w.style().polish(w); w.update()
+            for lbl in w.findChildren(QLabel):
+                lbl.style().unpolish(lbl); lbl.style().polish(lbl); lbl.update()
 
     def _on_folder_row_clicked(self, fid, name):
-        # expand/collapse + set as current folder
+        """Expand/collapse a folder row and show its notes."""
         if fid in self._expanded_folders: self._expanded_folders.remove(fid)
         else: self._expanded_folders.add(fid)
         self.current_folder_id = fid
@@ -380,11 +428,12 @@ class DashboardWidget(QWidget):
         self._refilter_notes()
 
     def _open_note_from_sidebar(self, nid):
+        """Open a note when clicked in the sidebar."""
         if self.on_add_note_clicked:
             self.on_add_note_clicked(nid)
 
     def _select_sidebar_row(self):
-        # keep the proper row visually selected
+        """Ensure the correct sidebar row is selected."""
         want = ("special", "all") if self.current_folder_id is None else \
                (("special", "uncat") if self.current_folder_id == -1 else ("folder", self.current_folder_id, None))
         for i in range(self.folder_list.count()):
@@ -395,38 +444,47 @@ class DashboardWidget(QWidget):
             if data[0] == "folder" and want[0] == "folder" and data[1] == want[1]:
                 self.folder_list.setCurrentRow(i); return
 
-    # ---------------- data fetch ----------------
+    # ---------- data fetch ----------
     def _fetch_notes(self):
-        # fetch notes for current folder + search
         q = (self.search_bar.text() or "").strip().lower()
         conn = self._db(); cur = conn.cursor()
         sql = "SELECT id, title, COALESCE(updated_at, created_at) AS modified_at FROM notes"
-        args, where = [], []
+        args, where = [self.user_id], ["user_id=?"]
+
         if self.current_folder_id == -1:
-            where.append("folder_id IS NULL")
+            # “Uncategorized” within this user
+            where.append("(folder_id IS NULL OR TRIM(CAST(folder_id AS TEXT))='' "
+                        "OR folder_id NOT IN (SELECT id FROM folders WHERE user_id=?))")
+            args.append(self.user_id)
         elif self.current_folder_id not in (None, -1):
-            where.append("folder_id = ?"); args.append(self.current_folder_id)
+            where.append("folder_id=?"); args.append(self.current_folder_id)
+
         if q:
             where.append("LOWER(title) LIKE ?"); args.append(f"%{q}%")
-        if where: sql += " WHERE " + " AND ".join(where)
+
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+
         sql += " ORDER BY " + ("modified_at DESC, LOWER(title)" if self.sort_mode == 0 else "LOWER(title)")
         cur.execute(sql, args)
         rows = cur.fetchall(); conn.close()
         return rows
 
+
     def _child_folders(self):
-        # children of current folder (or roots)
         if self.current_folder_id == -1: return []
         conn = self._db(); cur = conn.cursor()
         if self.current_folder_id is None:
-            cur.execute("SELECT id, name FROM folders WHERE parent_id IS NULL ORDER BY LOWER(name)")
+            cur.execute("SELECT id, name FROM folders WHERE parent_id IS NULL AND user_id=? ORDER BY LOWER(name)", (self.user_id,))
         else:
-            cur.execute("SELECT id, name FROM folders WHERE parent_id=? ORDER BY LOWER(name)", (self.current_folder_id,))
+            cur.execute("SELECT id, name FROM folders WHERE parent_id=? AND user_id=? ORDER BY LOWER(name)", (self.current_folder_id, self.user_id))
         out = cur.fetchall(); conn.close()
         return out
 
-    # ---------------- fill center ----------------
+
+    # ---------- fill center ----------
     def _refilter_notes(self):
+        """Refresh the list/grid with current filters and update status."""
         rows = self._fetch_notes()
         search_text = (self.search_bar.text() or "").strip().lower()
 
@@ -434,18 +492,16 @@ class DashboardWidget(QWidget):
             self._fill_table(rows)
             has_child = False
         else:
-            # filter folders by search text for grid view
             children = self._child_folders()
             folders = [(fid, name) for fid, name in children if (not search_text) or (search_text in (name or "").lower())]
             self._fill_grid(rows, folder_rows=folders)
             has_child = len(folders) > 0
 
-        # keep status simple (no "sorry" messages)
         self.status_label.setText(f"{len(rows)} note(s)")
-
         self._update_empty_state(empty_notes=(len(rows) == 0), has_child_folders=has_child)
 
     def _fill_table(self, rows):
+        """Populate the table view."""
         self.table.setRowCount(0)
         for (nid, title, modified) in rows:
             title = title or "Untitled"
@@ -470,6 +526,7 @@ class DashboardWidget(QWidget):
             self.table.setCellWidget(r, 2, btn)
 
     def _fill_grid(self, note_rows, folder_rows=None):
+        """Populate the grid view with folders and notes."""
         self.grid.clear()
         folders = self._child_folders() if folder_rows is None else folder_rows
         for fid, name in folders:
@@ -486,9 +543,9 @@ class DashboardWidget(QWidget):
             self.grid.addItem(it)
 
     def _update_empty_state(self, empty_notes: bool, has_child_folders: bool = False):
+        """Show an empty state message when needed."""
         searching = bool((self.search_bar.text() or "").strip())
         if self.view_mode == "grid":
-            # empty when no folders AND no notes in grid
             effective_empty = (not has_child_folders) and empty_notes
             self.grid.setVisible(not effective_empty)
             self.table.setVisible(False)
@@ -499,10 +556,9 @@ class DashboardWidget(QWidget):
                 elif self.current_folder_id == -1:
                     self.empty_label.setText("All your notes are within folders.\nNo notes are uncategorized.")
                 else:
-                    self.empty_label.setText("No notes found in this folder.\nClick + to add a new note.")
+                    self.empty_label.setText("No notes found.\nClick + to add a new note.")
             return
 
-        # list view
         self.table.setVisible(not empty_notes)
         self.grid.setVisible(False)
         self.empty_label.setVisible(empty_notes)
@@ -516,7 +572,7 @@ class DashboardWidget(QWidget):
 
     @staticmethod
     def _split_dt(ts):
-        # quick string split, fallback to iso parse
+        """Return (YYYY-MM-DD, HH:MM:SS) from various timestamp shapes."""
         if not ts: return ("", "")
         try:
             d, t = (ts.split("T", 1) if "T" in ts else ts.split(" ", 1))
@@ -528,8 +584,9 @@ class DashboardWidget(QWidget):
             except Exception:
                 return (ts[:10], "")
 
-    # ---------------- interactions ----------------
+    # ---------- interactions ----------
     def _on_sidebar_click(self, item: QListWidgetItem):
+        """Handle clicks on sidebar rows."""
         data = item.data(Qt.UserRole)
         if not data: return
         kind = data[0]
@@ -543,6 +600,7 @@ class DashboardWidget(QWidget):
             self._on_folder_row_clicked(data[1], data[2])
 
     def _folder_context_menu(self, pos: QPoint):
+        """Right-click menu on a folder row."""
         it = self.folder_list.itemAt(pos)
         if not it: return
         data = it.data(Qt.UserRole)
@@ -551,28 +609,28 @@ class DashboardWidget(QWidget):
         self._folder_edit_menu(fid, name, None)
 
     def _folder_edit_menu(self, folder_id, name, anchor_btn):
+        """Context menu for folder actions."""
         m = QMenu(self); m.setObjectName("popupMenu")
         m.addAction("Rename", lambda: self._rename_folder(folder_id, name))
         m.addAction("Delete", lambda: self._delete_folder(folder_id, name))
         m.exec_(anchor_btn.mapToGlobal(anchor_btn.rect().bottomLeft()) if anchor_btn else self.cursor().pos())
 
     def _rename_folder(self, folder_id, old_name):
+        """Rename a folder (limit 50 chars)."""
         name, ok = QInputDialog.getText(self, "Rename Folder", "Folder name:", text=old_name or "")
         if not (ok and name.strip()): return
         new_name = name.strip()
-
         if len(new_name) > 50:
             QMessageBox.warning(self, "Name too long", "Folder name must be 50 characters or fewer.")
             return
-
         conn = self._db(); cur = conn.cursor()
-        cur.execute("UPDATE folders SET name=? WHERE id=?", (new_name, folder_id))
+        cur.execute("UPDATE folders SET name=? WHERE id=? AND user_id=?", (new_name, folder_id, self.user_id))
         conn.commit(); conn.close()
         QMessageBox.information(self, "Folder Renamed", f"You renamed the folder into '{new_name}'.")
         self._refresh_folders(); self._refilter_notes()
 
-
     def _delete_folder(self, folder_id, folder_name):
+        """Delete a folder and move its notes to Uncategorized."""
         if QMessageBox.question(
             self, "Delete Folder",
             f"Delete folder '{folder_name}'?\nNotes will move to Uncategorized.",
@@ -580,8 +638,8 @@ class DashboardWidget(QWidget):
         ) != QMessageBox.Yes:
             return
         conn = self._db(); cur = conn.cursor()
-        cur.execute("UPDATE notes SET folder_id=NULL WHERE folder_id=?", (folder_id,))
-        cur.execute("DELETE FROM folders WHERE id=?", (folder_id,))
+        cur.execute("UPDATE notes SET folder_id=NULL WHERE folder_id=? AND user_id=?", (folder_id, self.user_id))
+        cur.execute("DELETE FROM folders WHERE id=? AND user_id=?", (folder_id, self.user_id))
         conn.commit(); conn.close()
         QMessageBox.information(self, "Folder Deleted", f"You deleted '{folder_name}' folder.")
         self._expanded_folders.discard(folder_id)
@@ -589,19 +647,18 @@ class DashboardWidget(QWidget):
             self.current_folder_id = None; self.current_folder_name = None
         self._refresh_folders(); self._refilter_notes()
 
-    # ---------------- add / import ----------------
+    # ---------- add / import ----------
     def _add_subfolder(self, parent_id):
-        # new folder under current (or root)
         name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
         if not (ok and name.strip()): return
         conn = self._db(); cur = conn.cursor()
-        cur.execute("INSERT INTO folders(name, parent_id) VALUES(?, ?)",
-                    (name.strip(), None if parent_id in (None, -1) else parent_id))
+        cur.execute("INSERT INTO folders(name, parent_id, user_id) VALUES(?, ?, ?)",
+                    (name.strip(), None if parent_id in (None, -1) else parent_id, self.user_id))
         conn.commit(); conn.close()
         self._refresh_folders(); self._refilter_notes()
 
     def _add_note_here(self, folder_id):
-        # ensure folder still exists (if chosen), else fallback to Uncategorized
+        """Create a new note in the current folder (or uncategorized)."""
         target = None if folder_id in (None, -1) else folder_id
         if target is not None:
             exists, _ = self._folder_exists(target)
@@ -611,13 +668,18 @@ class DashboardWidget(QWidget):
                                     f"You can’t add this to the folder '{shown}' because it no longer exists.")
                 target = None
         conn = self._db(); cur = conn.cursor()
-        cur.execute("INSERT INTO notes(folder_id, title, content) VALUES(?,?,?)", (target, "Untitled", ""))
+        cur.execute("INSERT INTO notes(folder_id, title, content, user_id) VALUES(?,?,?,?)",
+                    (target, "Untitled", "", self.user_id))
         nid = cur.lastrowid; conn.commit(); conn.close()
-        if self.on_add_note_clicked: self.on_add_note_clicked(nid)
+
+        self._refresh_folders()
         self._refilter_notes()
 
+        if self.on_add_note_clicked:
+            self.on_add_note_clicked(nid)
+
     def _import_note(self, folder_id):
-        # import a txt file as a note, same folder check as above
+        """Import a .txt file as a new note in the current folder."""
         path, _ = QFileDialog.getOpenFileName(self, "Import Note", "", "Text (*.txt)")
         if not path: return
         base = os.path.basename(path); title = os.path.splitext(base)[0]
@@ -638,36 +700,42 @@ class DashboardWidget(QWidget):
                 target = None
 
         conn = self._db(); cur = conn.cursor()
-        cur.execute("INSERT INTO notes(folder_id, title, content) VALUES (?,?,?)", (target, title, content))
+        cur.execute("INSERT INTO notes(folder_id, title, content, user_id) VALUES (?,?,?,?)",
+                    (target, title, content, self.user_id))
         nid = cur.lastrowid; conn.commit(); conn.close()
-        QMessageBox.information(self, "Imported", "Note added. Opening…")
-        if self.on_add_note_clicked: self.on_add_note_clicked(nid)
+
+        self._refresh_folders()
         self._refilter_notes()
 
-    # ---------------- table & grid actions ----------------
+        QMessageBox.information(self, "Imported", "Note added. Opening…")
+        if self.on_add_note_clicked: self.on_add_note_clicked(nid)
+
+    # ---------- table & grid actions ----------
     def _open_row_by_doubleclick(self, row, _col):
+        """Open a note by double-clicking its row."""
         item = self.table.item(row, 0)
         if not item: return
         nid = item.data(Qt.UserRole)
         if nid and self.on_add_note_clicked: self.on_add_note_clicked(nid)
 
     def _row_actions(self, note_id, title, anchor_btn):
+        """Context menu for a note row in table view."""
         m = QMenu(self); m.setObjectName("rowMenu")
         a_open   = m.addAction("Open")
         a_move   = m.addAction("Add to folder…")
         a_rename = m.addAction("Rename")
         a_delete = m.addAction("Delete")
-        a_export = m.addAction("Export…")
+        a_export_txt = m.addAction("Export as TXT")
         act = m.exec_(anchor_btn.mapToGlobal(anchor_btn.rect().bottomLeft()))
         if not act: return
-        if act == a_open and self.on_add_note_clicked: self.on_add_note_clicked(note_id)
+        if   act == a_open and self.on_add_note_clicked: self.on_add_note_clicked(note_id)
         elif act == a_move:   self._note_move_to_folder(note_id)
         elif act == a_rename: self._note_rename(note_id, title)
         elif act == a_delete: self._note_delete(note_id, title)
-        elif act == a_export: self._note_export(note_id, title)
+        elif act == a_export_txt: self._note_export(note_id, title)
 
-    # grid handlers mirror the table actions, kept short
     def _grid_open_item(self, item: QListWidgetItem):
+        """Open folder or note from grid view by double-click."""
         data = item.data(Qt.UserRole)
         if not data: return
         if data[0] == "folder":
@@ -677,6 +745,7 @@ class DashboardWidget(QWidget):
             self.on_add_note_clicked(data[1])
 
     def _grid_context_menu(self, pos):
+        """Right-click menu for grid items (folders and notes)."""
         item = self.grid.itemAt(pos)
         if not item: return
         data = item.data(Qt.UserRole)
@@ -692,24 +761,24 @@ class DashboardWidget(QWidget):
             if   act == a_open:   self.current_folder_id, self.current_folder_name = fid, name; self._refilter_notes()
             elif act == a_rename: self._rename_folder(fid, name)
             elif act == a_del:    self._delete_folder(fid, name)
-        else:  # note
+        else:
             nid, title = data[1], data[2]
             m = QMenu(self); m.setObjectName("rowMenu")
             a_open   = m.addAction("Open")
             a_move   = m.addAction("Add to folder…")
             a_rename = m.addAction("Rename")
             a_del    = m.addAction("Delete")
-            a_export = m.addAction("Export…")
+            a_export_txt = m.addAction("Export as TXT")
             act = m.exec_(gpos)
             if   act == a_open and self.on_add_note_clicked: self.on_add_note_clicked(nid)
             elif act == a_move:   self._note_move_to_folder(nid)
             elif act == a_rename: self._note_rename(nid, title)
             elif act == a_del:    self._note_delete(nid, title)
-            elif act == a_export: self._note_export(nid, title)
+            elif act == a_export_txt: self._note_export(nid, title)
 
-    # ---------------- note ops ----------------
+    # ---------- note ops ----------
     def _note_move_to_folder(self, note_id):
-        # let user pick a folder; verify it still exists
+        """Move a note into a chosen folder."""
         res = self._choose_folder_dialog()
         if res is None: return
         fid, fname = res
@@ -720,14 +789,15 @@ class DashboardWidget(QWidget):
                                 f"You can’t add this to the folder '{shown}' because it no longer exists.")
             return
         conn = self._db(); cur = conn.cursor()
-        cur.execute("UPDATE notes SET folder_id=? WHERE id=?", (fid, note_id))
+        cur.execute("UPDATE notes SET folder_id=? WHERE id=? AND user_id=?", (fid, note_id, self.user_id))
         conn.commit(); conn.close()
+        self._refresh_folders()
         self._refilter_notes()
 
     def _choose_folder_dialog(self):
-        # flat list of folders with indentation, returns (fid, name)
+        """Show a simple folder picker dialog and return (id, name) or None."""
         conn = self._db(); cur = conn.cursor()
-        cur.execute("SELECT id, name, parent_id FROM folders")
+        cur.execute("SELECT id, name, parent_id FROM folders WHERE user_id=?", (self.user_id,))
         rows = cur.fetchall(); conn.close()
 
         from collections import defaultdict
@@ -752,59 +822,63 @@ class DashboardWidget(QWidget):
         return (fid, name)
 
     def _note_rename(self, note_id, old_title):
+        """Rename a note (limit 50 chars)."""
         name, ok = QInputDialog.getText(self, "Rename Note", "New title:", text=old_title or "")
         if not (ok and name.strip()): return
         new_title = name.strip()
-
         if len(new_title) > 50:
             QMessageBox.warning(self, "Title too long", "Note title must be 50 characters or fewer.")
             return
-
         conn = self._db(); cur = conn.cursor()
-        cur.execute("UPDATE notes SET title=? WHERE id=?", (new_title, note_id))
+        cur.execute("UPDATE notes SET title=? WHERE id=? AND user_id=?", (new_title, note_id, self.user_id))
         conn.commit(); conn.close()
         QMessageBox.information(self, "Note Renamed", f"You renamed the note into '{new_title}'.")
+        self._refresh_folders()
         self._refilter_notes()
 
-
     def _note_delete(self, note_id, title):
+        """Delete a note and notify listeners to close any open editor tab."""
         shown = title or "Untitled"
         if QMessageBox.question(self, "Delete Note", f"Delete '{shown}'?",
                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         conn = self._db(); cur = conn.cursor()
-        cur.execute("DELETE FROM notes WHERE id=?", (note_id,))
+        cur.execute("DELETE FROM notes WHERE id=? AND user_id=?", (note_id, self.user_id))
         conn.commit(); conn.close()
         QMessageBox.information(self, "Note Deleted", f"You deleted '{shown}' note.")
+        self._refresh_folders()
         self._refilter_notes()
 
+        try:
+            self.noteDeleted.emit(note_id)
+        except Exception:
+            pass
+        cb = getattr(self, "on_note_deleted", None)
+        if callable(cb):
+            try:
+                cb(note_id)
+            except Exception:
+                pass
+
     def _note_export(self, note_id, title):
-        # quick TXT/PDF export
-        m = QMenu(self); m.setObjectName("rowMenu")
-        a_txt = m.addAction("Export as TXT")
-        a_pdf = m.addAction("Export as PDF")
-        act = m.exec_(self.cursor().pos())
-        if not act: return
+        """Export a note to .txt (title + plain text content)."""
         conn = self._db(); cur = conn.cursor()
-        cur.execute("SELECT title, content FROM notes WHERE id=?", (note_id,))
+        cur.execute("SELECT title, content FROM notes WHERE id=? AND user_id=?", (note_id, self.user_id))
         row = cur.fetchone(); conn.close()
         nt = (row[0] or title or "Untitled") if row else (title or "Untitled")
         content = (row[1] or "") if row else ""
-        if act == a_txt:
-            path, _ = QFileDialog.getSaveFileName(self, "Export TXT", f"{nt}.txt", "Text Files (*.txt)")
-            if not path: return
+
+        path, _ = QFileDialog.getSaveFileName(self, "Export TXT", f"{nt}.txt", "Text Files (*.txt)")
+        if not path: return
+        try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(nt + "\n\n" + content)
             QMessageBox.information(self, "Export", "TXT file saved.")
-        else:
-            path, _ = QFileDialog.getSaveFileName(self, "Export PDF", f"{nt}.pdf", "PDF Files (*.pdf)")
-            if not path: return
-            writer = QPdfWriter(path); writer.setResolution(96)
-            p = QPainter(writer); x, y, lh = 96, 120, 18
-            p.drawText(x, y, nt); y += lh * 2
-            for line in (content or "").splitlines():
-                if y > writer.height() - 96:
-                    writer.newPage(); y = 96
-                p.drawText(x, y, line); y += lh
-            p.end()
-            QMessageBox.information(self, "Export", "PDF exported.")
+        except Exception as e:
+            QMessageBox.critical(self, "Export", f"Failed to save TXT:\n{e}")
+
+    # ---------- navigation ----------
+    def _go_home(self):
+        """Go back to the home screen if a callback is provided."""
+        if callable(getattr(self, "on_back_home", None)):
+            self.on_back_home()
