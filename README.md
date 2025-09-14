@@ -3,7 +3,7 @@
 ## 📑 Table of Contents
 - [Project Overview](#-project-overview)  
 - [Environment Setup](#-environment-setup)  
-- [Database Setup](#-database-setup)  
+- [Database Setup](#database-setup)  
 - [Running the Application](#-running-the-application)  
 - [Login Information](#-login-information)  
 - [Features](#-features)  
