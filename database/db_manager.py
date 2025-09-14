@@ -505,3 +505,253 @@ def get_gpa_history(student_id, limit=10):
     except sqlite3.Error as e:
         print(f"Database error in get_gpa_history: {e}")
         return []
+
+# -----------------
+# NOTES (for Notes Organizer)
+# -----------------
+
+def create_folder(name, parent_id=None, user_id=None):
+    """Create a new folder and return its id."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO folders (name, parent_id, user_id)
+        VALUES (?, ?, ?)
+    """, (name, parent_id, user_id))
+    fid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return fid
+
+def get_folder(folder_id, user_id=None):
+    """Fetch one folder as a dict (or None) only if it belongs to the user."""
+    conn = get_connection()
+    cur = conn.cursor()
+    if user_id:
+        cur.execute("""
+            SELECT id, name, parent_id, user_id, color, created_at, updated_at
+            FROM folders
+            WHERE id = ? AND user_id = ?
+        """, (folder_id, user_id))
+    else:
+        cur.execute("""
+            SELECT id, name, parent_id, user_id, color, created_at, updated_at
+            FROM folders
+            WHERE id = ?
+        """, (folder_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "name": row[1],
+        "parent_id": row[2],
+        "user_id": row[3],
+        "color": row[4],
+        "created_at": row[5],
+        "updated_at": row[6]
+    }
+
+def list_folders(parent_id=None, user_id=None):
+    """Return a list of folders for a specific user."""
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    if user_id:
+        if parent_id is None:
+            cur.execute("""
+                SELECT id, name, parent_id, user_id, color, created_at, updated_at
+                FROM folders
+                WHERE user_id = ? AND parent_id IS NULL
+                ORDER BY LOWER(name)
+            """, (user_id,))
+        else:
+            cur.execute("""
+                SELECT id, name, parent_id, user_id, color, created_at, updated_at
+                FROM folders
+                WHERE user_id = ? AND parent_id = ?
+                ORDER BY LOWER(name)
+            """, (user_id, parent_id))
+    else:
+        if parent_id is None:
+            cur.execute("""
+                SELECT id, name, parent_id, user_id, color, created_at, updated_at
+                FROM folders
+                WHERE parent_id IS NULL
+                ORDER BY LOWER(name)
+            """)
+        else:
+            cur.execute("""
+                SELECT id, name, parent_id, user_id, color, created_at, updated_at
+                FROM folders
+                WHERE parent_id = ?
+                ORDER BY LOWER(name)
+            """, (parent_id,))
+    
+    rows = cur.fetchall()
+    conn.close()
+    return [{
+        "id": r[0], "name": r[1], "parent_id": r[2], "user_id": r[3],
+        "color": r[4], "created_at": r[5], "updated_at": r[6]
+    } for r in rows]
+
+def update_folder(folder_id, name, parent_id=None, user_id=None):
+    """Update an existing folder. Bumps updated_at to now."""
+    conn = get_connection()
+    cur = conn.cursor()
+    if user_id:
+        if parent_id is None:
+            cur.execute("""
+                UPDATE folders
+                SET name = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (name, folder_id, user_id))
+        else:
+            cur.execute("""
+                UPDATE folders
+                SET name = ?, parent_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (name, parent_id, folder_id, user_id))
+    else:
+        if parent_id is None:
+            cur.execute("""
+                UPDATE folders
+                SET name = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (name, folder_id))
+        else:
+            cur.execute("""
+                UPDATE folders
+                SET name = ?, parent_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (name, parent_id, folder_id))
+    conn.commit()
+    conn.close()
+
+def delete_folder(folder_id, user_id=None):
+    """Delete one folder only if it belongs to the user."""
+    conn = get_connection()
+    cur = conn.cursor()
+    if user_id:
+        # First move notes to uncategorized
+        cur.execute("""
+            UPDATE notes SET folder_id = NULL 
+            WHERE folder_id = ? AND user_id = ?
+        """, (folder_id, user_id))
+        # Then delete the folder
+        cur.execute("""
+            DELETE FROM folders 
+            WHERE id = ? AND user_id = ?
+        """, (folder_id, user_id))
+    else:
+        cur.execute("""
+            UPDATE notes SET folder_id = NULL 
+            WHERE folder_id = ?
+        """, (folder_id,))
+        cur.execute("""
+            DELETE FROM folders 
+            WHERE id = ?
+        """, (folder_id,))
+    conn.commit()
+    conn.close()
+
+def list_notes(user_id, order="updated_desc", limit=10):
+    """Retrieve notes for a specific user with optional ordering and limit"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Build ORDER BY clause
+        order_by = "updated_at DESC" if order == "updated_desc" else "created_at DESC"
+        
+        cursor.execute(f"""
+            SELECT id, title, content, created_at, updated_at 
+            FROM notes 
+            WHERE user_id = ?
+            ORDER BY {order_by}
+            LIMIT ?
+        """, (user_id, limit))
+        
+        notes = []
+        for row in cursor.fetchall():
+            notes.append({
+                'id': row[0],
+                'title': row[1],
+                'content': row[2],
+                'created_at': row[3],
+                'updated_at': row[4]
+            })
+        
+        conn.close()
+        return notes
+    except sqlite3.Error as e:
+        print(f"Database error in list_notes: {e}")
+        return []
+
+    
+def get_note(note_id, user_id):
+    """Get a specific note by ID, ensuring it belongs to the user"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, title, content, created_at, updated_at 
+            FROM notes 
+            WHERE id = ? AND user_id = ?
+        """, (note_id, user_id))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                'id': row[0],
+                'title': row[1],
+                'content': row[2],
+                'created_at': row[3],
+                'updated_at': row[4]
+            }
+        return None
+    except sqlite3.Error as e:
+        print(f"Database error in get_note: {e}")
+        return None
+    
+def create_note(title, content, user_id):
+    """Create a new note for a user"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO notes (title, content, user_id) 
+            VALUES (?, ?, ?)
+        """, (title, content, user_id))
+        
+        note_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return note_id
+    except sqlite3.Error as e:
+        print(f"Database error in create_note: {e}")
+        return None
+
+def update_note(note_id, title, content, user_id):
+    """Update an existing note, ensuring it belongs to the user"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE notes 
+            SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ?
+        """, (title, content, note_id, user_id))
+        
+        conn.commit()
+        conn.close()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Database error in update_note: {e}")
+        return False

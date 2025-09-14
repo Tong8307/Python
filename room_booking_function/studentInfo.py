@@ -119,6 +119,7 @@ class StudentInfoPage(QWidget):
             sender.setCursorPosition(cursor_pos)
 
     def update_name_field(self, student_id, name_field):
+        #Check the student id are empty or not, if yes = retrieve data from database and save to name_field
         student_name = get_student_name(student_id.strip()) if student_id.strip() else ""
         name_field.setText(student_name or "")
 

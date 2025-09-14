@@ -3,7 +3,7 @@ import os
 import re
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton,
-    QHBoxLayout, QFileDialog, QMessageBox, QGridLayout, QStackedWidget
+    QHBoxLayout, QMessageBox, QGridLayout, QStackedWidget
 )
 from PyQt5.QtGui import QPixmap, QFont, QPainter, QBrush
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QEvent
@@ -18,7 +18,13 @@ from room_booking_function.room_booking_widget import RoomBookingWidget
 from room_booking_function.feature_button import FeatureButton
 from room_booking_function.guidelines import GuidelinesPage
 from room_booking_function.all_booking import AllBookingsPage
+
+# Academic feature
 from gpa_calculator_function.gpa_calculator_widget import GPACalculatorWidget
+
+# Notes features
+from notes_organizer_function.dashboard import DashboardWidget
+from notes_organizer_function.notes_organizer import NoteOrganizerWidget
 
 class SlidingMenu(QWidget):
     def __init__(self, parent=None):
@@ -78,6 +84,7 @@ class SlidingMenu(QWidget):
             btn = QPushButton(text)
             btn.setObjectName("menuOptions")
             btn.setCursor(Qt.PointingHandCursor)
+            
             if action == "logout":
                 btn.clicked.connect(self.show_logout_dialog)
             elif action == "home":
@@ -86,11 +93,25 @@ class SlidingMenu(QWidget):
                 btn.clicked.connect(self.show_guidelines)
             elif action == "all_bookings": 
                 btn.clicked.connect(self.show_all_bookings)
+            elif action == "notes":
+                # Directly connect to the notes opening method
+                btn.clicked.connect(self.open_notes_from_menu)
             else:
                 btn.clicked.connect(lambda checked, a=action: self.handle_menu_action(a))
             layout.addWidget(btn)
 
-        layout.addStretch()
+    def open_notes_from_menu(self):
+        """Open notes directly from menu"""
+        if not self.is_logged_in:
+            QMessageBox.warning(self, "Login Required", 
+                            "Please login first to access notes.")
+            return
+        
+        main_window = self.parent()
+        if isinstance(main_window, MainWindow):
+            # Use the existing open_notes_page method
+            main_window.open_notes_page()
+            main_window.hide_menu()  # Hide menu after selection
 
     def handle_menu_action(self, action):
         """Handle menu actions that require login"""
@@ -344,10 +365,82 @@ class MainWindow(QMainWindow):
         elif feature_name == "Academic Tools":
             self.pages.setCurrentWidget(self.gpa_calculator_widget)
         elif feature_name == "Note Organizer":
-            print("Future: Go to Note Organizer")
+            # ALWAYS create a new dashboard with the current user_id
+            # Remove old dashboard if it exists
+            if hasattr(self, 'dashboard'):
+                try:
+                    if self.pages.indexOf(self.dashboard) != -1:
+                        self.pages.removeWidget(self.dashboard)
+                    self.dashboard.deleteLater()
+                except Exception as e:
+                    print(f"Error removing old dashboard: {e}")
+                delattr(self, 'dashboard')
+            
+            # Create new dashboard with current user_id and proper back callback
+            self.dashboard = DashboardWidget(
+                user_id=self.user_id,  # Use current user ID
+                on_add_note_clicked=self.open_notes_page,
+                on_back_clicked=self.back_to_main_from_dashboard  # Add this callback
+            )
+            self.pages.addWidget(self.dashboard)
+            self.pages.setCurrentWidget(self.dashboard)
         else:
-            print(f"{feature_name} clicked!")
+            self.show_qna()
 
+    def open_notes_page(self, note_id=None):
+        if not hasattr(self, 'notes_page'):
+            # Pass user_id to the notes organizer
+            self.notes_page = NoteOrganizerWidget(
+                on_return_callback=self.back_to_dashboard, 
+                user_id=self.user_id  # This is correct
+            )
+            self.pages.addWidget(self.notes_page)
+        
+        self.pages.setCurrentWidget(self.notes_page)
+        
+        # If a specific note ID is provided, try to open it
+        if note_id is not None:
+            try:
+                # Use the public method instead of private method
+                self.notes_page._open_by_id(note_id)
+            except Exception as e:
+                QMessageBox.warning(self, "Open Note", f"Could not open the selected note.\n{str(e)}")
+
+    def back_to_main_from_dashboard(self):
+        """Callback for dashboard back button - returns to main feature grid"""
+        self.pages.setCurrentWidget(self.feature_grid_page)
+        
+    def back_to_dashboard(self):
+        """Callback for notes organizer - returns to dashboard"""
+        # Make sure we have a current dashboard
+        if not hasattr(self, 'dashboard'):
+            self.dashboard = DashboardWidget(
+                user_id=self.user_id,
+                on_add_note_clicked=self.open_notes_page,
+                on_back_clicked=self.back_to_main_from_dashboard  # Add this callback
+            )
+            self.pages.addWidget(self.dashboard)
+        
+        self.pages.setCurrentWidget(self.dashboard)
+        
+        # Refresh the dashboard to show current user's data
+        try:
+            self.dashboard._refresh_folders()
+            self.dashboard._refilter_notes()
+        except Exception as e:
+            print(f"Error refreshing dashboard: {e}")
+
+
+    def show_qna(self):
+        QMessageBox.information(
+            self,
+            "Coming Soon",
+            "✨ This feature is not available yet.\n\n"
+            "The Q & A sessions module is still under development and "
+            "will be added in a future update.\n\n"
+            "Stay tuned for more exciting features!"
+        )
+        
     def toggle_menu(self):
         # Don't show menu if not logged in
         if not self.user_id:
@@ -434,12 +527,22 @@ class MainWindow(QMainWindow):
         # Hide menu button when logged out
         self.menu_btn.setVisible(False)
         
-        # Clear main app pages SAFELY
+        # Clear main app pages SAFELY - ADD DASHBOARD TO THE LIST
         widgets_to_remove = [
             self.feature_grid_page,
             self.location_selection_page,
             self.gpa_calculator_widget
         ]
+        
+        # Add dashboard if it exists
+        if hasattr(self, 'dashboard'):
+            widgets_to_remove.append(self.dashboard)
+            delattr(self, 'dashboard')
+        
+        # Add notes page if it exists
+        if hasattr(self, 'notes_page'):
+            widgets_to_remove.append(self.notes_page)
+            delattr(self, 'notes_page')
         
         for widget in widgets_to_remove:
             if widget is not None:

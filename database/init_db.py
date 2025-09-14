@@ -1,6 +1,8 @@
+import os
 import sqlite3
 import hashlib
 import secrets
+
 
 def hash_password(password, salt=None):
     """Hash password with salt using SHA-256"""
@@ -9,9 +11,11 @@ def hash_password(password, salt=None):
     hashed = hashlib.sha256((password + salt).encode()).hexdigest()
     return hashed, salt
 
-# Connect to SQLite database (or create it)
-conn = sqlite3.connect('student_app.db')
+# ---------- Connect (DB inside /database) ----------
+DB_PATH = os.path.join(os.path.dirname(__file__), "student_app.db")
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
+cursor.execute("PRAGMA foreign_keys = ON")
 
 # 1. Users (students only) - UPDATED with password hashing
 cursor.execute("""
@@ -108,6 +112,41 @@ CREATE TABLE IF NOT EXISTS gpa_courses (
 )
 """)
 
+# 9. Folders
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL CHECK (length(name) <= 50),
+    parent_id INTEGER,
+    user_id TEXT,  -- Add this column
+    color TEXT DEFAULT '#FFFFFF',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES folders(id),
+    FOREIGN KEY (user_id) REFERENCES users(student_id)  -- Add foreign key
+)
+""") 
+
+# 10. Notes
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    folder_id INTEGER NULL,
+    title TEXT NOT NULL CHECK (length(title) <= 50),
+    content TEXT,
+    cover_path TEXT,
+    file_path TEXT,
+    user_id TEXT,  -- Add this column
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (folder_id) REFERENCES folders(id),
+    FOREIGN KEY (user_id) REFERENCES users(student_id)  -- Add foreign key
+)
+""")
+
+# Helpful indexes for notes
+cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_title   ON notes(title)")
+cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at)")
 
 # Insert Locations
 cursor.executemany("INSERT OR IGNORE INTO locations (id, name) VALUES (?, ?)", [
@@ -194,29 +233,48 @@ for student_id, name, password, profile_picture in users_data:
 cursor.execute("DELETE FROM booking_students")
 cursor.execute("DELETE FROM bookings")
 
-# Insert Bookings
-cursor.executemany("""
-    INSERT INTO bookings (room_id, date, start_time, end_time, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?)
-""", [
-    ('R101', '2025-08-01', '10:00', '12:00', 'booked', '24WMD0624'),
-    ('R202', '2025-08-02', '14:00', '16:00', 'booked', '24WMD0345'),
-    ('R201', '2025-08-03', '09:00', '11:00', 'cancelled', '24WMD0188'),
-    ('R301', '2025-08-04', '15:00', '17:00', 'booked', '24WMD0199')
-])
+# Insert Bookings and store their real IDs
+booking_data = [
+    ('R111', '2025-08-01', '10:00', '12:00', 'booked', '24WMD0624'),
+    ('R112', '2025-08-02', '14:00', '16:00', 'booked', '24WMD0345'),
+    ('R113', '2025-08-03', '09:00', '11:00', 'cancelled', '24WMD0188'),
+    ('R320', '2025-08-04', '15:00', '17:00', 'booked', '24WMD0199')
+]
 
-# Insert Booking Students (participants)
-cursor.executemany("INSERT INTO booking_students (booking_id, student_id, student_name) VALUES (?, ?, ?)", [
-    (1, '24WMD0624', 'Eun Eun Bond'),
-    (1, '24WMD0345', 'Yu Yu Bond'),
-    (2, '24WMD0345', 'Yu Yu Bond'),
-    (2, '24WMD0222', 'Nur Aisyah'),
-    (3, '24WMD0188', 'Lim Mei Mei'),
-    (4, '24WMD0199', 'John Tan'),
-    (4, '24WMD0624', 'Eun Eun Bond')
-])
+booking_ids = []
+for room_id, date, start_time, end_time, status, created_by in booking_data:
+    cursor.execute(
+        "INSERT INTO bookings (room_id, date, start_time, end_time, status, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+        (room_id, date, start_time, end_time, status, created_by)
+    )
+    booking_ids.append(cursor.lastrowid)  # get actual AUTOINCREMENT ID
 
-print("Database initialized successfully!")
+# Insert Booking Students using actual booking IDs
+booking_students_data = [
+    (booking_ids[0], '24WMD0624', 'Eun Eun Bond'),
+    (booking_ids[0], '24WMD0345', 'Yu Yu Bond'),
+    (booking_ids[1], '24WMD0345', 'Yu Yu Bond'),
+    (booking_ids[1], '24WMD0222', 'Nur Aisyah'),
+    (booking_ids[2], '24WMD0188', 'Tong Tong Bond'),
+    (booking_ids[3], '24WMD0199', 'John Tan')
+]
+
+for booking_id, student_id, student_name in booking_students_data:
+    cursor.execute(
+        "INSERT INTO booking_students (booking_id, student_id, student_name) VALUES (?, ?, ?)",
+        (booking_id, student_id, student_name)
+    )
+
+# ---------- Seed a welcome note if notes is empty ----------
+cursor.execute("SELECT COUNT(*) FROM notes")
+if cursor.fetchone()[0] == 0:
+    # Create welcome notes for each user
+    for student_id, name, password, profile_picture in users_data:
+        cursor.execute(
+            "INSERT INTO notes (folder_id, title, content, user_id) VALUES (?, ?, ?, ?)",
+            (None, "Welcome to Your Notes App", "👋 Welcome! Use the + button to add notes. You can organize notes into folders anytime.", student_id)
+        )
 
 conn.commit()
 conn.close()
+print(f"Database initialized successfully at: {DB_PATH}")

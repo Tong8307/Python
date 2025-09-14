@@ -22,6 +22,7 @@ class LocationSelectionWidget(QWidget):
         title.setObjectName("bookingHeader")
         main_layout.addWidget(title)
 
+        #Label to inform user select location
         subtitle = QLabel("Please select a location: ")
         subtitle.setObjectName("bookingSubheader")
         main_layout.addWidget(subtitle)
@@ -96,12 +97,14 @@ class LocationSelectionWidget(QWidget):
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(lambda: self.go_to_booking(loc_id))
         return btn
-        
+    
+    #Redirect to the booking widget
     def go_to_booking(self, location_id):
         try:
             self.main_window.open_room_booking_page(location_id)
         except Exception as e:
             print(f"Navigation error: {e}") 
-            
+    
+    #Go back to the home
     def go_back(self):
         self.main_window.pages.setCurrentWidget(self.main_window.feature_grid_page)

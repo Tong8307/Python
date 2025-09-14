@@ -17,7 +17,10 @@ class RoomBookingWidget(QWidget):
         self.main_window = main_window
         self.location_id = location_id
 
+        #Which location is being booked from previous section
         self.location_name = self.get_location_name(location_id)
+
+        #the student who logged in
         self.current_user_id = user_id
         
         # Apply styles

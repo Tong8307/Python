@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, 
                             QPushButton, QFrame, QMessageBox, QScrollArea)
 from PyQt5.QtCore import Qt
-from database.db_manager import get_bookings_by_user, update_booking_status, update_expired_bookings, get_students_in_booking
+from database.db_manager import get_bookings_by_user, update_booking_status, update_expired_bookings, get_students_in_booking,get_booking_creator
 
 class MyBookingsPage(QWidget):
     def __init__(self, main_window):
@@ -36,7 +36,7 @@ class MyBookingsPage(QWidget):
         
         # Load bookings initially
         self.load_bookings()
-    
+        
     def load_bookings(self):
         """Load and display user's bookings for this specific location"""
         # First, update expired bookings to 'completed' status
@@ -44,7 +44,7 @@ class MyBookingsPage(QWidget):
         if updated_count > 0:
             print(f"Updated {updated_count} expired bookings to 'completed' status")
         
-        # Clear existing bookings
+        # Clear existing bookings / UI content
         for i in reversed(range(self.bookings_layout.count())): 
             widget = self.bookings_layout.itemAt(i).widget()
             if widget:
@@ -127,7 +127,6 @@ class MyBookingsPage(QWidget):
             button_layout.setAlignment(Qt.AlignCenter)
             
             # Check if user is the creator of this booking (only creators can cancel)
-            from database.db_manager import get_booking_creator
             is_creator = self.is_booking_creator(booking_id)
             
             if status == "booked" and is_creator:
@@ -194,13 +193,8 @@ class MyBookingsPage(QWidget):
     
     def is_booking_creator(self, booking_id):
         """Check if the current user is the creator of this booking"""
-        from database.db_manager import get_connection
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT created_by FROM bookings WHERE id = ?", (booking_id,))
-        result = cursor.fetchone()
-        conn.close()
-        return result and result[0] == self.current_user_id
+        creator_id = get_booking_creator(booking_id)
+        return creator_id == self.current_user_id
     
     def cancel_booking(self, booking_id):
         """Cancel a booking (only available to creator)"""

@@ -355,6 +355,7 @@ class NewBookingPage(QWidget):
             for id_input, name_input in self.student_inputs:
                 if id_input == sender:
                     student_name = get_student_name(text.strip())
+                    #Student name found ？
                     if student_name:
                         name_input.setText(student_name)
                     else:

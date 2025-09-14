@@ -267,9 +267,6 @@ class GPACalculatorPage(QWidget):
         
         content_layout.addWidget(result_card, 25)  # 25% width for right side
         
-        # Add content layout to main layout
-        layout.addLayout(content_layout, 1)  # 1 = stretch factor to expand
-        
         # Add course and reset buttons container
         button_container = QHBoxLayout()
         button_container.setSpacing(8)
@@ -350,29 +347,29 @@ class GPACalculatorPage(QWidget):
         self.update_results()
 
     def reset_all(self):
-        """Reset all inputs and course rows"""
-        reply = QMessageBox.question(self, 'Reset Confirmation', 
-                                   'Are you sure you want to reset all inputs?',
-                                   QMessageBox.Yes | QMessageBox.No, 
-                                   QMessageBox.No)
-        
-        if reply == QMessageBox.Yes:
-            # Clear CGPA and credits inputs
-            self.cgpa_input.clear()
-            self.credits_input.clear()
+            """Reset all inputs and course rows"""
+            reply = QMessageBox.question(self, 'Reset Confirmation', 
+                                    'Are you sure you want to reset all inputs?',
+                                    QMessageBox.Yes | QMessageBox.No, 
+                                    QMessageBox.No)
             
-            # Remove all course rows except 3 (the default rows)
-            while len(self.course_rows) > 3:
-                self.remove_course_row(self.course_rows[-1][3])
-            
-            # Reset the remaining course row
-            if self.course_rows:
-                name, credits, grade, widget = self.course_rows[0]
-                name.clear()
-                credits.setValue(0)
-                grade.setCurrentIndex(0)
-            
-            self.update_results()
+            if reply == QMessageBox.Yes:
+                # Clear CGPA and credits inputs
+                self.cgpa_input.clear()
+                self.credits_input.clear()
+                
+                # Create a copy of the list to avoid modification during iteration
+                rows_to_remove = self.course_rows[3:]  # Get rows beyond the first 3
+                for row_data in rows_to_remove:
+                    self.remove_course_row(row_data[3])  # row_data[3] is the widget
+                
+                # Reset the remaining 3 course rows
+                for name, credits, grade, widget in self.course_rows:
+                    name.clear()
+                    credits.setValue(0)
+                    grade.setCurrentIndex(0)
+                
+                self.update_results()
 
     def validate_numeric_input(self, text, field_name, is_float=False):
         """Validate numeric input and return valid status and value"""
