@@ -1,7 +1,7 @@
 # notes_organizer.py
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from styles.notes_organizer_styles import get_notes_organizer_styles
 from database import db_manager as db
@@ -279,9 +279,12 @@ class InkTextEdit(QTextEdit):
     - Freehand strokes (pencil, pen, marker) + eraser (normal/lasso)
     - Floating images with crop, resize, move, and delete
     - Undo/redo for strokes and image adds
+    Emits:
+      overlayChanged -> whenever overlay content changes (images/strokes/eraser/etc.)
     """
     selectionChangedForImage = pyqtSignal(bool)
     imageCountChanged        = pyqtSignal(int)
+    overlayChanged           = pyqtSignal()      
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -429,35 +432,45 @@ class InkTextEdit(QTextEdit):
         self.imageCountChanged.emit(len(self.images))
         self.selectionChangedForImage.emit(True)
         self.viewport().update()
+        self.overlayChanged.emit()  
 
     # ---- undo/redo
     def undo(self):
         """Undo last stroke/image add/erase."""
+        changed = False
         if self.undo_stack:
             kind, payload = self.undo_stack.pop()
             if kind == "stroke" and self.strokes:
                 self.redo_stack.append(("stroke", self.strokes.pop()))
+                changed = True
             elif kind == "add_image" and self.images:
                 self.redo_stack.append(("add_image", self.images.pop()))
                 self.imageCountChanged.emit(len(self.images))
+                changed = True
             elif kind == "erase":
                 self.redo_stack.append(("erase", self.strokes[:]))
                 self.strokes = payload
+                changed = True
         self.viewport().update()
+        if changed:
+            self.overlayChanged.emit()  
 
     def redo(self):
         """Redo last undone action."""
         if not self.redo_stack: return
         kind, payload = self.redo_stack.pop()
+        changed = False
         if kind == "stroke":
-            self.strokes.append(payload); self.undo_stack.append(("stroke", None))
+            self.strokes.append(payload); self.undo_stack.append(("stroke", None)); changed = True
         elif kind == "add_image":
             self.images.append(payload);  self.undo_stack.append(("add_image", len(self.images)-1))
-            self.imageCountChanged.emit(len(self.images))
+            self.imageCountChanged.emit(len(self.images)); changed = True
         elif kind == "erase":
             self.undo_stack.append(("erase", self.strokes[:]))
-            self.strokes = payload
+            self.strokes = payload; changed = True
         self.viewport().update()
+        if changed:
+            self.overlayChanged.emit()  
 
     # ---- eraser helpers
     def _near_any(self, pt: QPoint, pts, radius: int) -> bool:
@@ -483,12 +496,7 @@ class InkTextEdit(QTextEdit):
 
     def _point_in_poly(self, p: QPoint, poly: list) -> bool:
         """Point-in-polygon test for lasso eraser."""
-        x, y = p.x(), p.y(); inside = False; n = len(poly)
-        for i in range(n):
-            x1, y1 = poly[i].x(), poly[i].y()
-            x2, y2 = poly[(i+1)%n].y(), poly[(i+1)%n].y()
-            # (typo-proofed below)
-        # Corrected ray-casting:
+        x, y = p.x(), p.y()
         inside = False
         n = len(poly)
         for i in range(n):
@@ -575,11 +583,19 @@ class InkTextEdit(QTextEdit):
                         return
                 self._press_pos_view = None
 
+            # finish resizing
             if self._resizing:
                 self._resizing = False
                 self._apply_tool_cursor()
                 self._update_hover_cursor(e.pos())
-                self.viewport().update(); return
+                self.viewport().update()
+                self.overlayChanged.emit()  # <-- NEW (size persisted via image file; pos unchanged)
+                return
+
+            # if we were dragging an image (position changed), persist
+            if self.selected_idx is not None and not self._current_pts and (e.button() == Qt.LeftButton):
+                # We don't track a 'wasDragging' flag; emitting is harmless.
+                self.overlayChanged.emit()  # <-- NEW
 
             if not self._current_pts:
                 self._update_hover_cursor(e.pos())
@@ -599,6 +615,7 @@ class InkTextEdit(QTextEdit):
                                     if not any(self._point_in_poly(pt, poly) for pt in s.points)]
                 self.undo_stack.append(("erase", before))
                 self.redo_stack.clear()
+                self.overlayChanged.emit()  
             else:
                 pts = self._smooth(self._current_pts)
                 if self.tool == "pencil":
@@ -609,11 +626,13 @@ class InkTextEdit(QTextEdit):
                     color, width, alpha = self.colors["pen"],    self.widths["pen"],    self.alphas["pen"]
                 self.strokes.append(Stroke(pts, color, width, alpha, self.tool))
                 self.undo_stack.append(("stroke", None))
+                self.overlayChanged.emit()  # <-- NEW
 
             self._current_pts = []
             self._update_hover_cursor(e.pos())
             self.viewport().update(); return
         super().mouseReleaseEvent(e)
+
 
     def _start_crop_selected(self):
         """Open crop dialog for the selected image."""
@@ -631,6 +650,7 @@ class InkTextEdit(QTextEdit):
                 im["scale"] = 1.0
                 im["angle"] = 0.0
                 self.viewport().update()
+                self.overlayChanged.emit() 
 
     def paintEvent(self, ev):
         """Draw images, selection boxes, handles, and strokes on top of text."""
@@ -731,6 +751,7 @@ class InkTextEdit(QTextEdit):
             self.imageCountChanged.emit(len(self.images))
             self.selectionChangedForImage.emit(False)
             self.viewport().update()
+            self.overlayChanged.emit() 
 
     # ---- helpers
     def _smooth(self, pts):
@@ -746,7 +767,7 @@ class InkTextEdit(QTextEdit):
 
     # ---- persistence
     def overlay_to_dict(self):
-        """Serialize strokes and images (positions and opacity)."""
+        """Serialize strokes and images (including pos/scale/angle/opacity)."""
         return {
             "strokes": [{
                 "points": [(p.x(), p.y()) for p in s.points],
@@ -756,9 +777,11 @@ class InkTextEdit(QTextEdit):
                 "mode":   s.mode
             } for s in self.strokes],
             "images": [{
-                "abspath": None,
+                "abspath": None,  # replaced with saved path in NoteTabWidget.to_payload()
                 "pos": (im["pos"].x(), im["pos"].y()),
-                "opacity": im["opacity"],
+                "opacity": im.get("opacity", 1.0),
+                "scale": im.get("scale", 1.0),
+                "angle": im.get("angle", 0.0),
             } for im in self.images]
         }
 
@@ -776,9 +799,12 @@ class InkTextEdit(QTextEdit):
             pm = QPixmap(path) if path and os.path.exists(path) else QPixmap()
             if pm.isNull(): continue
             pos = imd.get("pos", (40, 40))
+            scale = float(imd.get("scale", 1.0))
+            angle = float(imd.get("angle", 0.0))
             im = {"orig": pm.copy(), "source": pm.copy(), "pm": pm.copy(),
                   "pos": QPoint(int(pos[0]), int(pos[1])), "opacity": float(imd.get("opacity", 1.0)),
-                  "angle": 0.0, "scale": 1.0}
+                  "angle": angle, "scale": scale}
+            self._compose_pm(im)
             self.images.append(im)
 
         self.imageCountChanged.emit(len(self.images))
@@ -871,8 +897,7 @@ class NoteTabWidget(QWidget):
         self.cb_fontsize.setProperty("bigText", True)
         self.cb_fontsize.addItems([str(s) for s in (10,12,14,16,18,20,24,28,32)])
         self.cb_fontsize.setCurrentText("14")
-        for i in range(self.cb_fontsize.count()):
-            self.cb_fontsize.setItemData(i, Qt.AlignCenter, Qt.TextAlignmentRole)
+        for i in range(self.cb_fontsize.count()): self.cb_fontsize.setItemData(i, Qt.AlignCenter, Qt.TextAlignmentRole)
 
         self.btn_fontcolor = QToolButton()
         self.btn_fontcolor.setObjectName("notesTB")
@@ -936,6 +961,7 @@ class NoteTabWidget(QWidget):
         self._save_timer = QTimer(self); self._save_timer.setSingleShot(True); self._save_timer.setInterval(800)
         self.title_input.textChanged.connect(self._debounce_save)
         self.editor.textChanged.connect(self._debounce_save)
+        self.editor.overlayChanged.connect(self._debounce_save)  
 
         # actions
         self.btn_img.clicked.connect(self._insert_image)
@@ -964,6 +990,11 @@ class NoteTabWidget(QWidget):
             {"pencil": pencil_path, "pen": pen_path, "marker": marker_path, "eraser": eraser_path},
             base_size=ICON_SIZE - 10
         )
+
+        # ======= LOAD PERSISTED TOOL PREFS BEFORE BADGES =======
+        self._prefs_timer = QTimer(self); self._prefs_timer.setSingleShot(True); self._prefs_timer.setInterval(600)
+        self._prefs_timer.timeout.connect(self._save_tool_prefs)
+        self._load_tool_prefs()
 
         # color badges
         self._update_fontcolor_icon(store_base=True)
@@ -999,6 +1030,50 @@ class NoteTabWidget(QWidget):
         self.btn_eras.setMenu(self._eraser_menu)
         self._eraser_menu.aboutToShow.connect(_sync_eraser_menu_state)
 
+    # ======= PERSISTENCE OF TOOL PREFS (colors/sizes/eraser mode) =======
+    def _load_tool_prefs(self):
+        """Load per-user tool preferences from DB and apply to editor."""
+        try:
+            prefs = db.get_notes_tool_prefs(self.user_id)
+        except Exception:
+            prefs = None
+        if not prefs:
+            return
+        # colors
+        for k in ("pencil", "pen", "marker"):
+            hx = prefs.get("colors", {}).get(k)
+            if hx:
+                try:
+                    self.editor.colors[k] = QColor(hx)
+                except Exception:
+                    pass
+        # sizes
+        for k in ("pencil", "pen", "marker", "eraser"):
+            val = prefs.get("widths", {}).get(k)
+            if isinstance(val, (int, float)) and val > 0:
+                self.editor.widths[k] = int(val)
+        # eraser mode
+        mode = prefs.get("eraser_mode")
+        if mode in ("normal", "lasso"):
+            self.editor.eraser_mode = mode
+
+    def _schedule_prefs_save(self):
+        """Debounce saves to avoid disk spam."""
+        self._prefs_timer.start()
+
+    def _save_tool_prefs(self):
+        """Persist current tool prefs to DB for this user."""
+        prefs = {
+            "colors": {k: self.editor.colors[k].name() for k in ("pencil", "pen", "marker")},
+            "widths": {k: int(self.editor.widths[k]) for k in ("pencil", "pen", "marker", "eraser")},
+            "eraser_mode": self.editor.eraser_mode
+        }
+        try:
+            db.set_notes_tool_prefs(self.user_id, prefs)
+        except Exception as e:
+            # Silent failure is fine for prefs
+            print(f"Note prefs save failed: {e}")
+
     # ---- icon badge helpers
     def _apply_accent_badge(self, btn: QToolButton, color: QColor):
         """Draw a small color dot over a toolbar icon to show the active color."""
@@ -1024,6 +1099,7 @@ class NoteTabWidget(QWidget):
     def _set_eraser_mode_ui(self, mode: str):
         """Switch eraser mode and keep cursor consistent."""
         self.editor.set_eraser_mode(mode)
+        self._schedule_prefs_save()
 
     def _update_fontcolor_icon(self, store_base=False):
         """Draw a bold 'A' icon; the color dot shows selected font color."""
@@ -1181,6 +1257,7 @@ class NoteTabWidget(QWidget):
                     if name == "pencil": self._apply_accent_badge(self.btn_pencil, c)
                     elif name == "pen":  self._apply_accent_badge(self.btn_pen, c)
                     elif name == "marker": self._apply_accent_badge(self.btn_mark, c)
+                    self._schedule_prefs_save()
 
             swatch.clicked.connect(_pick)
             pop.layout().addWidget(swatch)
@@ -1195,6 +1272,11 @@ class NoteTabWidget(QWidget):
         }
         current_width = self.editor.widths.get(name, 4)
         widths_for_tool = WIDTHS.get(name, WIDTHS["pencil"])
+
+        def on_size_clicked(width_val):
+            self.editor.set_tool_size(name, width_val)
+            self._schedule_prefs_save()
+            pop.close()
 
         def dot(dot_px, width_val, is_current=False):
             btn = QPushButton("", pop)
@@ -1214,7 +1296,7 @@ class NoteTabWidget(QWidget):
                     "QPushButton:hover{background:#e6f0ff;}"
                 )
             btn.setStyleSheet(base)
-            btn.clicked.connect(lambda: (self.editor.set_tool_size(name, width_val), pop.close()))
+            btn.clicked.connect(lambda: on_size_clicked(width_val))
             return btn
 
         for diam, wv in zip(DOT_DIAMS, widths_for_tool):
@@ -1235,13 +1317,19 @@ class NoteTabWidget(QWidget):
             # include user_id to avoid collisions across accounts
             abs_path = os.path.join(MEDIA_DIR, f"{self.user_id}-{self.note_id}-{i}.png")
             pm.save(abs_path, "PNG")
-            img_out.append({"abspath": abs_path, "pos": (pos.x(), pos.y()), "opacity": im["opacity"]})
+            img_out.append({
+                "abspath": abs_path,
+                "pos": (pos.x(), pos.y()),
+                "opacity": im.get("opacity", 1.0),
+                "scale": im.get("scale", 1.0),
+                "angle": im.get("angle", 0.0),
+            })
         overlay["images"] = img_out
         return {
             "title": (self.title_input.text().strip() or "Untitled"),
             "content": self.editor.toHtml(),
             "overlay": overlay,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "user_id": self.user_id
         }
 
@@ -1453,12 +1541,15 @@ class NoteOrganizerWidget(QWidget):
         if isinstance(w, NoteTabWidget):
             payload = w.to_payload()
             try:
-                db.update_note(w.note_id, payload["title"], payload["content"], json.dumps(payload["overlay"]), user_id=self.user_id)
+                db.update_note(w.note_id, payload["title"], payload["content"],
+                               json.dumps(payload["overlay"]), user_id=self.user_id)
             except TypeError:
                 try:
-                    db.update_note(w.note_id, payload["title"], payload["content"], json.dumps(payload["overlay"]), self.user_id)
+                    db.update_note(w.note_id, payload["title"], payload["content"],
+                                   json.dumps(payload["overlay"]), self.user_id)
                 except TypeError:
-                    db.update_note(w.note_id, payload["title"], payload["content"], user_id=self.user_id)
+                    db.update_note(w.note_id, payload["title"], payload["content"],
+                                   json.dumps(payload["overlay"]), user_id=self.user_id)
         self.tabs.removeTab(index)
         if self.tabs.count() > 0 and self.tabs.currentIndex() == -1:
             self.tabs.setCurrentIndex(max(0, index - 1))
@@ -1489,12 +1580,15 @@ class NoteOrganizerWidget(QWidget):
 
         payload = w.to_payload()
         try:
-            db.update_note(w.note_id, payload["title"], payload["content"], json.dumps(payload["overlay"]), user_id=self.user_id)
+            db.update_note(w.note_id, payload["title"], payload["content"],
+                           json.dumps(payload["overlay"]), user_id=self.user_id)
         except TypeError:
             try:
-                db.update_note(w.note_id, payload["title"], payload["content"], json.dumps(payload["overlay"]), self.user_id)
+                db.update_note(w.note_id, payload["title"], payload["content"],
+                               json.dumps(payload["overlay"]), self.user_id)
             except TypeError:
-                db.update_note(w.note_id, payload["title"], payload["content"], user_id=self.user_id)
+                db.update_note(w.note_id, payload["title"], payload["content"],
+                               json.dumps(payload["overlay"]), user_id=self.user_id)
         self._update_tab_text_for(w, payload["title"])
         if show_popup:
             QMessageBox.information(self, "Saved", "Your note has been saved.")
