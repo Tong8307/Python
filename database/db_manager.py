@@ -1,13 +1,9 @@
 import sqlite3
 import hashlib
 import secrets
+import json
 
 DB_PATH = "database/student_app.db"
-
-# Password Salt
-# If a password is like a plain hamburger 🍔, the salt is like special seasoning that makes each hamburger unique.
-# User A: password "cat" + salt "x1y2" → hash "def456"
-# User B: password "cat" + salt "z3w4" → hash "ghi789"  ← DIFFERENT!
 
 # -----------------
 # Password Hashing
@@ -246,7 +242,6 @@ def delete_booking(booking_id):
     conn.commit()
     conn.close()
 
-
 def update_expired_bookings():
     """Update bookings that have passed to 'completed' status"""
     conn = get_connection()
@@ -268,7 +263,6 @@ def update_expired_bookings():
     conn.commit()
     conn.close()
     return cursor.rowcount  # Return number of updated bookings
-
 
 # -----------------
 # BOOKING STUDENTS
@@ -381,7 +375,6 @@ def find_best_available_room(location_id, feature_id, min_capacity, date, start,
 # -----------------
 # Time Table
 # -----------------
-
 def get_bookings_for_timetable(room_id, date):
     """Get all bookings for a room on a specific date for timetable display"""
     conn = get_connection()
@@ -414,8 +407,6 @@ def get_rooms_by_location(location_id):
 # -----------------
 # GPA HISTORY
 # -----------------
-# Add these functions to your db_manager.py
-
 def save_gpa_calculation(student_id, semester_credits, gpa, total_credits, cgpa, 
                        courses_data, current_cgpa, completed_credits):
     """Save a GPA calculation to the database using normalized tables"""
@@ -423,11 +414,9 @@ def save_gpa_calculation(student_id, semester_credits, gpa, total_credits, cgpa,
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Get current local time in Python (without seconds)
         from datetime import datetime
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")  # ← No seconds
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")  # No seconds
         
-        # Insert main GPA record with Python's local time
         cursor.execute('''
             INSERT INTO gpa_history 
             (student_id, timestamp, semester_credits, gpa, total_credits, cgpa, 
@@ -438,7 +427,6 @@ def save_gpa_calculation(student_id, semester_credits, gpa, total_credits, cgpa,
         
         gpa_history_id = cursor.lastrowid
         
-        # Insert individual courses
         for course in courses_data:
             cursor.execute('''
                 INSERT INTO gpa_courses (gpa_history_id, name, credits, grade)
@@ -458,7 +446,6 @@ def get_gpa_history(student_id, limit=10):
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Get main GPA records
         cursor.execute('''
             SELECT id, timestamp, semester_credits, gpa, total_credits, cgpa, 
                    current_cgpa, completed_credits
@@ -472,7 +459,6 @@ def get_gpa_history(student_id, limit=10):
         for row in cursor.fetchall():
             gpa_history_id = row[0]
             
-            # Get courses for this GPA calculation
             cursor.execute('''
                 SELECT name, credits, grade 
                 FROM gpa_courses 
@@ -509,6 +495,14 @@ def get_gpa_history(student_id, limit=10):
 # -----------------
 # NOTES (for Notes Organizer)
 # -----------------
+
+# Defaults used when no per-user tool prefs exist yet
+_DEFAULT_TOOL_PREFS = {
+    "colors": {"pencil": "#555555", "pen": "#000000", "marker": "#ffeb3b"},
+    "widths": {"pencil": 2, "pen": 4, "marker": 14, "eraser": 20},
+    "alphas": {"pencil": 255, "pen": 255, "marker": 110},
+    "eraser_mode": "normal"
+}
 
 def create_folder(name, parent_id=None, user_id=None):
     """Create a new folder and return its id."""
@@ -666,7 +660,7 @@ def list_notes(user_id, order="updated_desc", limit=10):
         order_by = "updated_at DESC" if order == "updated_desc" else "created_at DESC"
         
         cursor.execute(f"""
-            SELECT id, title, content, created_at, updated_at 
+            SELECT id, title, content, overlay, created_at, updated_at 
             FROM notes 
             WHERE user_id = ?
             ORDER BY {order_by}
@@ -679,8 +673,9 @@ def list_notes(user_id, order="updated_desc", limit=10):
                 'id': row[0],
                 'title': row[1],
                 'content': row[2],
-                'created_at': row[3],
-                'updated_at': row[4]
+                'overlay': row[3],  # may be None or JSON string
+                'created_at': row[4],
+                'updated_at': row[5]
             })
         
         conn.close()
@@ -689,7 +684,6 @@ def list_notes(user_id, order="updated_desc", limit=10):
         print(f"Database error in list_notes: {e}")
         return []
 
-    
 def get_note(note_id, user_id):
     """Get a specific note by ID, ensuring it belongs to the user"""
     try:
@@ -697,7 +691,7 @@ def get_note(note_id, user_id):
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT id, title, content, created_at, updated_at 
+            SELECT id, title, content, overlay, created_at, updated_at 
             FROM notes 
             WHERE id = ? AND user_id = ?
         """, (note_id, user_id))
@@ -710,24 +704,30 @@ def get_note(note_id, user_id):
                 'id': row[0],
                 'title': row[1],
                 'content': row[2],
-                'created_at': row[3],
-                'updated_at': row[4]
+                'overlay': row[3],  # JSON string or None
+                'created_at': row[4],
+                'updated_at': row[5]
             }
         return None
     except sqlite3.Error as e:
         print(f"Database error in get_note: {e}")
         return None
     
-def create_note(title, content, user_id):
-    """Create a new note for a user"""
+def create_note(title, content, user_id, overlay=None):
+    """Create a new note for a user (overlay is optional JSON string)"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO notes (title, content, user_id) 
-            VALUES (?, ?, ?)
-        """, (title, content, user_id))
+        if overlay is None:
+            cursor.execute("""
+                INSERT INTO notes (title, content, user_id) 
+                VALUES (?, ?, ?)
+            """, (title, content, user_id))
+        else:
+            cursor.execute("""
+                INSERT INTO notes (title, content, overlay, user_id) 
+                VALUES (?, ?, ?, ?)
+            """, (title, content, overlay, user_id))
         
         note_id = cursor.lastrowid
         conn.commit()
@@ -737,21 +737,142 @@ def create_note(title, content, user_id):
         print(f"Database error in create_note: {e}")
         return None
 
-def update_note(note_id, title, content, user_id):
-    """Update an existing note, ensuring it belongs to the user"""
+def update_note(note_id, title, content, overlay_or_user=None, user_id=None):
+    """
+    Update an existing note.
+
+    Backward-compatible signatures:
+      - update_note(id, title, content, user_id)                      # legacy: 4th arg = user_id
+      - update_note(id, title, content, overlay_json, user_id=uid)    # new: overlay passed, user_id keyword
+
+    IMPORTANT FIX:
+    Detect overlay JSON **independently** of whether user_id is provided. Previously,
+    when user_id was supplied as a keyword (your code path), overlay_or_user was ignored.
+    """
+
+    def _looks_like_json(payload) -> bool:
+        if isinstance(payload, (bytes, bytearray)):
+            try:
+                payload = payload.decode("utf-8", "ignore")
+            except Exception:
+                return False
+        if not isinstance(payload, str):
+            return False
+        s = payload.strip()
+        if not s or s[0] not in "{[":
+            return False
+        try:
+            json.loads(s)  # validate
+            return True
+        except Exception:
+            return False
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
-        cursor.execute("""
-            UPDATE notes 
-            SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND user_id = ?
-        """, (title, content, note_id, user_id))
-        
+
+        overlay = None
+        uid = user_id
+
+        # --- FIXED LOGIC: determine overlay independently of uid presence
+        if _looks_like_json(overlay_or_user):
+            overlay = overlay_or_user if isinstance(overlay_or_user, str) else overlay_or_user.decode("utf-8", "ignore")
+        elif uid is None:
+            # legacy path: treat 4th arg as user_id when it's not overlay JSON
+            uid = overlay_or_user
+
+        if uid is None:
+            raise TypeError("update_note requires user_id (either as the legacy 4th argument or as the user_id= keyword).")
+
+        if overlay is None:
+            cursor.execute("""
+                UPDATE notes 
+                SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (title, content, note_id, uid))
+        else:
+            cursor.execute("""
+                UPDATE notes 
+                SET title = ?, content = ?, overlay = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (title, content, overlay, note_id, uid))
+
         conn.commit()
+        changed = cursor.rowcount > 0
         conn.close()
-        return cursor.rowcount > 0
+        return changed
     except sqlite3.Error as e:
         print(f"Database error in update_note: {e}")
+        return False
+
+
+def update_note_overlay(note_id, overlay_json, user_id):
+    """Update only the overlay JSON for a note (convenience helper)."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE notes 
+            SET overlay = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ?
+        """, (overlay_json, note_id, user_id))
+        conn.commit()
+        ok = cursor.rowcount > 0
+        conn.close()
+        return ok
+    except sqlite3.Error as e:
+        print(f"Database error in update_note_overlay: {e}")
+        return False
+
+# --------- Notes Tool Preferences (per user) ----------
+def get_notes_tool_prefs(user_id):
+    """
+    Load per-user tool preferences for the Notes editor.
+    Returns a dict; falls back to sane defaults if no row exists or JSON is bad.
+    """
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM notes_tool_prefs WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
+        conn.close()
+        if not row or not row[0]:
+            return dict(_DEFAULT_TOOL_PREFS)
+        try:
+            data = json.loads(row[0])
+            # Merge with defaults to tolerate future schema changes
+            merged = dict(_DEFAULT_TOOL_PREFS)
+            merged.update({k: v for k, v in data.items() if k in ("colors", "widths", "alphas", "eraser_mode")})
+            # Ensure nested dicts exist
+            for k in ("colors", "widths", "alphas"):
+                merged[k] = dict(_DEFAULT_TOOL_PREFS[k], **merged.get(k, {}))
+            return merged
+        except Exception:
+            return dict(_DEFAULT_TOOL_PREFS)
+    except sqlite3.Error as e:
+        print(f"Database error in get_notes_tool_prefs: {e}")
+        return dict(_DEFAULT_TOOL_PREFS)
+
+def set_notes_tool_prefs(user_id, prefs_dict):
+    """
+    Upsert per-user tool preferences as JSON.
+    Expects a dict like:
+      {"colors": {...}, "widths": {...}, "alphas": {...}, "eraser_mode": "normal|lasso"}
+    """
+    try:
+        payload = json.dumps(prefs_dict or {}, ensure_ascii=False)
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO notes_tool_prefs (user_id, data, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET
+                data = excluded.data,
+                updated_at = CURRENT_TIMESTAMP
+        """, (user_id, payload))
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.Error as e:
+        print(f"Database error in set_notes_tool_prefs: {e}")
         return False
