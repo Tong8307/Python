@@ -3,7 +3,6 @@ import sqlite3
 import hashlib
 import secrets
 
-
 def hash_password(password, salt=None):
     """Hash password with salt using SHA-256"""
     if salt is None:
@@ -16,6 +15,16 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "student_app.db")
 conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 cursor.execute("PRAGMA foreign_keys = ON")
+
+# --- helpers for lightweight migrations ---
+def _table_has_column(table: str, column: str) -> bool:
+    cursor.execute(f"PRAGMA table_info({table})")
+    return any(row[1] == column for row in cursor.fetchall())
+
+def _ensure_notes_overlay_column():
+    """Add notes.overlay if the DB existed before and column is missing."""
+    if not _table_has_column("notes", "overlay"):
+        cursor.execute("ALTER TABLE notes ADD COLUMN overlay TEXT")
 
 # 1. Users (students only) - UPDATED with password hashing
 cursor.execute("""
@@ -118,29 +127,43 @@ CREATE TABLE IF NOT EXISTS folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL CHECK (length(name) <= 50),
     parent_id INTEGER,
-    user_id TEXT,  -- Add this column
+    user_id TEXT,
     color TEXT DEFAULT '#FFFFFF',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (parent_id) REFERENCES folders(id),
-    FOREIGN KEY (user_id) REFERENCES users(student_id)  -- Add foreign key
+    FOREIGN KEY (user_id) REFERENCES users(student_id)
 )
 """) 
 
-# 10. Notes
+# 10. Notes  (includes overlay column)
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id INTEGER NULL,
     title TEXT NOT NULL CHECK (length(title) <= 50),
     content TEXT,
+    overlay TEXT,
     cover_path TEXT,
     file_path TEXT,
-    user_id TEXT,  -- Add this column
+    user_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (folder_id) REFERENCES folders(id),
-    FOREIGN KEY (user_id) REFERENCES users(student_id)  -- Add foreign key
+    FOREIGN KEY (user_id) REFERENCES users(student_id)
+)
+""")
+
+# If the table already existed without overlay, migrate it now.
+_ensure_notes_overlay_column()
+
+# 11. Notes tool preferences (per user; JSON payload)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS notes_tool_prefs (
+    user_id TEXT PRIMARY KEY,
+    data    TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(student_id)
 )
 """)
 
@@ -207,7 +230,7 @@ cursor.executemany("INSERT OR IGNORE INTO rooms (id, location_id, capacity, name
     ('R332', 3, 8, 'Room A187', 'F04'),
     ('R333', 3, 5, 'Room A040', 'F05'),
     ('R334', 3, 3, 'Room A188', 'F01'),
-    ('R335', 3, 6, 'Room A041', 'F02'),
+    ('R335', 3, 6, 'Room A041', 'F02'),  # FIXED stray quote after 6
     ('R336', 3, 9, 'Room A189', 'F03'),
     ('R337', 3, 1, 'Room A042', 'F04'),
     ('R338', 3, 10, 'Room A190', 'F05')
