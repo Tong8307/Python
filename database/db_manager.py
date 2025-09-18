@@ -351,8 +351,8 @@ def check_room_availability(room_id, date, start, end):
     conn.close()
     return result is None
 
-def find_best_available_room(location_id, feature_id, min_capacity, date, start, end):
-    """Find the best available room that matches criteria (smallest sufficient capacity)"""
+def find_available_rooms(location_id, feature_id, min_capacity, date, start, end):
+    """Find all available rooms sorted by smallest sufficient capacity"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -366,11 +366,10 @@ def find_best_available_room(location_id, feature_id, min_capacity, date, start,
                  (start_time >= ? AND start_time < ?))
         )
         ORDER BY r.capacity, r.name
-        LIMIT 1
     ''', (location_id, feature_id, min_capacity, date, end, start, start, end))
-    result = cursor.fetchone()
+    results = cursor.fetchall()
     conn.close()
-    return result
+    return results  # return list of possible rooms
 
 # -----------------
 # Time Table

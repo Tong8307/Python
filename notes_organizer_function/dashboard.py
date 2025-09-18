@@ -1,4 +1,5 @@
 import os
+import sqlite3
 from datetime import datetime
 
 from PyQt5.QtWidgets import (
@@ -725,14 +726,41 @@ class DashboardWidget(QWidget):
     def _add_subfolder(self, parent_id):
         """Create a new folder (nested if a folder is selected) for this user."""
         name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
-        if not (ok and name.strip()): return
-        conn = self._db(); cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO folders(name, parent_id, user_id) VALUES(?, ?, ?)",
-            (name.strip(), None if parent_id in (None, -1) else parent_id, self.user_id)
-        )
-        conn.commit(); conn.close()
-        self._refresh_folders(); self._refilter_notes()
+        if not (ok and name.strip()):
+            return
+
+        new_name = name.strip()
+        # UI-side validation to match DB constraint
+        if len(new_name) > 50:
+            QMessageBox.warning(
+                self,
+                "Name too long",
+                "Folder name must be 50 characters or fewer."
+            )
+            return
+
+        conn = self._db()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO folders(name, parent_id, user_id) VALUES(?, ?, ?)",
+                (new_name, None if parent_id in (None, -1) else parent_id, self.user_id)
+            )
+            conn.commit()
+        except sqlite3.IntegrityError as e:
+            # Defensive: if DB constraint fires for any reason, show a friendly message.
+            QMessageBox.warning(
+                self,
+                "Could not create folder",
+                "The folder name is invalid (max 50 characters)."
+            )
+            return
+        finally:
+            conn.close()
+
+        self._refresh_folders()
+        self._refilter_notes()
+
 
     def _add_note_here(self, folder_id):
         """Create a new note in the current folder (or uncategorized)."""

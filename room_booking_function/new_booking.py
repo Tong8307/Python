@@ -5,8 +5,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt, QDate, QTime, QTimer
 from PyQt5.QtGui import QFont
 import sqlite3
-from database.db_manager import (get_features, find_best_available_room, 
-                                check_student_exists, create_booking_with_students,
+from database.db_manager import (get_features,check_student_exists, create_booking_with_students,
                                 get_student_name)
 from styles.booking_styles import get_booking_styles
 from room_booking_function.studentInfo import StudentInfoPage
@@ -373,7 +372,7 @@ class NewBookingPage(QWidget):
             QMessageBox.warning(self, "Error", f"Could not load features: {str(e)}")
 
     def update_room_info(self):
-        """Find the best available room based on selection (internal use only)"""
+        """Find the best available room with fallback"""
         feature_id = self.feature_combo.currentData()
         num_students = self.students_spin.value()
         
@@ -386,27 +385,18 @@ class NewBookingPage(QWidget):
             start_str = self.start_time.time().toString("HH:mm")
             end_str = self.end_time.time().toString("HH:mm")
             
-            # Find the best available room
-            room = find_best_available_room(
-                self.location_id, feature_id, num_students, date, start_str, end_str
-            )
+            # Get all candidate rooms
+            from database.db_manager import find_available_rooms, check_room_availability
+            rooms = find_available_rooms(self.location_id, feature_id, num_students, date, start_str, end_str)
             
-            if room:
-                room_id, room_name, capacity = room
-                
-                # Double-check if the room is actually available
-                from database.db_manager import check_room_availability
-                is_available = check_room_availability(room_id, date, start_str, end_str)
-                
-                if is_available:
+            self.selected_room_id = None
+            for room_id, room_name, capacity in rooms:
+                if check_room_availability(room_id, date, start_str, end_str):
                     self.selected_room_id = room_id
                     self.selected_room_name = room_name
                     self.selected_room_capacity = capacity
-                else:
-                    self.selected_room_id = None
-            else:
-                self.selected_room_id = None
-                
+                    break  # stop at first available (smallest capacity) room
+            
         except sqlite3.Error as e:
             QMessageBox.warning(self, "Error", f"Could not find available room: {str(e)}")
             self.selected_room_id = None
